@@ -1,0 +1,20 @@
+{
+  "title": "Factor Find",
+  "subtitle": "Read the correlations, draw the factor model, press FIT. Can you recover the model that generated the data?",
+  "type": "PLAY_LEARN",
+  "level": "postgrad",
+  "domain": ["Social Sciences", "Interdisciplinary"],
+  "field": ["Psychology", "Research Methods"],
+  "subdiscipline": ["Quantitative psychology", "Quantitative methods"],
+  "mode": "both",
+  "course": "National University of Singapore — Department of Psychology — PL5225 Structural Equation Modeling",
+  "keywords": ["structural equation modeling", "confirmatory factor analysis", "factor model", "model fit", "RMSEA", "BIC", "path diagram", "scree plot", "partial correlation", "network"],
+  "learning_goals": [
+    "Infer the number of factors and the loading pattern from a scree plot, correlation heatmap and (partial) correlation networks.",
+    "Specify a confirmatory factor model as a path diagram, including cross-loadings, factor correlations and residual correlations.",
+    "Evaluate a fitted model with RMSEA, CFI and residual correlations, and weigh fit against parsimony using BIC."
+  ],
+  "creator": "Sacha Epskamp",
+  "institution": "National University of Singapore",
+  "license": "CC-BY-4.0"
+}

@@ -190,5 +190,26 @@
     return last;
   }
 
-  FF.bank = { MODELS, dims, populationSigma, trueSpec, permuteSpec, generate, makeRound };
+  // True population values in the format of FF.sem.fit()'s `est`, in
+  // displayed item order (used to colour the true-model diagram).
+  function trueEst(model, perm) {
+    const { p, m } = dims(model);
+    const pos = new Array(p);
+    perm.forEach((orig, k) => { pos[orig] = k; });
+    const Phi = la.eye(m);
+    for (const [a, b, r] of model.phi || []) { Phi[a][b] = r; Phi[b][a] = r; }
+    const comm = la.mul(la.mul(model.L, Phi), la.transpose(model.L)).map((r, i) => r[i]);
+    const theta = comm.map(c => 1 - c);
+    const est = [];
+    for (let i = 0; i < p; i++) for (let j = 0; j < m; j++)
+      if (model.L[i][j] !== 0) est.push({ mat: 'L', r: pos[i], c: j, std: model.L[i][j] });
+    for (const [a, b, r] of model.phi || []) if (r !== 0) est.push({ mat: 'P', r: Math.max(a, b), c: Math.min(a, b), std: r });
+    for (const [i, j, c] of model.resid || []) {
+      est.push({ mat: 'T', r: Math.max(pos[i], pos[j]), c: Math.min(pos[i], pos[j]), std: c / Math.sqrt(theta[i] * theta[j]) });
+    }
+    for (let i = 0; i < p; i++) est.push({ mat: 'T', r: pos[i], c: pos[i], std: theta[i] });
+    return { est };
+  }
+
+  FF.bank = { MODELS, dims, populationSigma, trueSpec, permuteSpec, generate, makeRound, trueEst };
 })(typeof window !== 'undefined' ? window : globalThis);

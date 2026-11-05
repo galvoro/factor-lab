@@ -368,6 +368,69 @@
     };
   }
 
-  // Baseline (independence) model fit summary for the "empty canvas".
-  FF.sem = { buildParams, fit, checkIdentification, implied, matricesFrom };
+  // ------------------------------------------------------------------
+  // lavaan export: syntax for the drawn model plus R code to fit it on the
+  // round's covariance matrix (std.lv = TRUE, like this engine).
+  // ------------------------------------------------------------------
+  function lavaanSyntax(spec, itemName, facName) {
+    itemName = itemName || (i => 'y' + (i + 1));
+    facName = facName || (j => 'F' + (j + 1));
+    const lines = [];
+    const regs = spec.regressions || [];
+    const hasItems = new Array(spec.m).fill(false);
+    for (const [, j] of spec.loadings) hasItems[j] = true;
+    for (let j = 0; j < spec.m; j++) {
+      const ind = spec.loadings.filter(([, f]) => f === j).map(([i]) => itemName(i));
+      // a factor without items is defined by the factors it points to (higher-order)
+      if (!hasItems[j]) regs.filter(([, f]) => f === j).forEach(([t]) => ind.push(facName(t)));
+      if (ind.length) lines.push(facName(j) + ' =~ ' + ind.join(' + '));
+    }
+    for (const [t, f] of regs) if (hasItems[f]) lines.push(facName(t) + ' ~ ' + facName(f));
+    const endo = new Set(regs.map(([t]) => t));
+    const drawn = new Set((spec.factorCovs || []).map(([a, b]) => Math.min(a, b) + ',' + Math.max(a, b)));
+    for (const [a, b] of spec.factorCovs || []) lines.push(facName(Math.min(a, b)) + ' ~~ ' + facName(Math.max(a, b)));
+    // lavaan's cfa() correlates exogenous factors by default: fix undrawn pairs to zero
+    for (let a = 0; a < spec.m; a++) for (let b = a + 1; b < spec.m; b++) {
+      if (!drawn.has(a + ',' + b) && !endo.has(a) && !endo.has(b) && hasItems[a] !== undefined) {
+        const higherA = !hasItems[a], higherB = !hasItems[b];
+        const kidsOf = (h) => regs.filter(([, f]) => f === h).map(([t]) => t);
+        if ((higherA && kidsOf(a).includes(b)) || (higherB && kidsOf(b).includes(a))) continue;
+        lines.push(facName(a) + ' ~~ 0*' + facName(b));
+      }
+    }
+    for (const [a, b] of spec.residCovs || []) lines.push(itemName(Math.min(a, b)) + ' ~~ ' + itemName(Math.max(a, b)));
+    const used = new Set(spec.loadings.map(([i]) => i));
+    for (const [a, b] of spec.residCovs || []) { used.add(a); used.add(b); }
+    for (let i = 0; i < spec.p; i++) if (!used.has(i)) lines.push(itemName(i) + ' ~~ ' + itemName(i));
+    return lines.join('\n');
+  }
+
+  function rCode(spec, S, N) {
+    const p = spec.p;
+    const Su = S.map(r => r.map(v => v * N / (N - 1)));
+    const rows = Su.map((r, i) => '  ' + r.map(v => v.toFixed(6).padStart(10)).join(',') + (i < p - 1 ? ',' : ''));
+    return [
+      'library(lavaan)',
+      '',
+      '# Sample covariance matrix (N - 1 denominator) of this round\'s data',
+      'S <- matrix(c(',
+      rows.join('\n'),
+      '), ' + p + ', ' + p + ', byrow = TRUE)',
+      'rownames(S) <- colnames(S) <- paste0("y", 1:' + p + ')',
+      '',
+      'model <- \'',
+      lavaanSyntax(spec),
+      '\'',
+      '',
+      'fit <- cfa(model, sample.cov = S, sample.nobs = ' + N + ', std.lv = TRUE)',
+      'fitMeasures(fit, c("chisq", "df", "pvalue", "rmsea", "cfi", "tli", "srmr", "bic"))',
+      'standardizedSolution(fit)',
+      '',
+      '# Path diagram in the style of this game:',
+      '# library(semPlot)',
+      '# semPaths(fit, "std", theme = "colorblind", style = "lisrel")',
+    ].join('\n');
+  }
+
+  FF.sem = { buildParams, fit, checkIdentification, implied, matricesFrom, lavaanSyntax, rCode };
 })(typeof window !== 'undefined' ? window : globalThis);

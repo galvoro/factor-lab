@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FACTOR FIND</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="audio.js"></script>
+</head>
+<body class="tab-data">
+
+<div id="app">
+  <!-- ==================== HUD ==================== -->
+  <header id="hud">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="8" r="6" />
+        <rect x="2" y="22" width="7" height="7" /><rect x="12.5" y="22" width="7" height="7" /><rect x="23" y="22" width="7" height="7" />
+        <path d="M13 13 L7 21 M16 14 L16 21 M19 13 L25 21" />
+      </svg>
+      <span class="brand-name">FACTOR FIND</span>
+    </div>
+    <div class="hud-stats">
+      <div class="stat"><span class="stat-label">ROUND</span><span id="hud-round" class="stat-val">1/5</span></div>
+      <div class="stat"><span class="stat-label">FITS LEFT</span><span id="hud-fits" class="pips"></span></div>
+      <div class="stat"><span class="stat-label">SCORE</span><span id="hud-score" class="stat-val">0</span></div>
+    </div>
+    <div class="hud-btns">
+      <button id="btn-help" class="icon-btn" aria-label="How to play" title="How to play">?</button>
+      <button id="btn-mute" class="icon-btn" aria-label="Mute" title="Sound on/off">&#9834;</button>
+      <button id="btn-home" class="icon-btn" aria-label="Quit to title" title="Quit to title">&#10005;</button>
+    </div>
+  </header>
+
+  <!-- phone-only tab switcher -->
+  <nav id="tabs">
+    <button data-tab="data" class="on">Correlations</button>
+    <button data-tab="model">Model</button>
+  </nav>
+
+  <main id="board">
+    <!-- ==================== DASHBOARD ==================== -->
+    <section id="dash" class="pane">
+      <div class="dash-head">
+        <div class="seg" id="view-seg" role="tablist" aria-label="What to show">
+          <button data-view="data" class="on" role="tab">Data</button>
+          <button data-view="model" role="tab" disabled>Model</button>
+          <button data-view="resid" role="tab" disabled>Residuals</button>
+        </div>
+        <span id="dash-note" class="dash-note">N = 200 &middot; <span id="dash-p">9</span> items</span>
+      </div>
+      <div class="dash-grid">
+        <figure class="panel" id="p-scree"><figcaption>Scree plot</figcaption><svg class="plot"></svg></figure>
+        <figure class="panel" id="p-heat"><figcaption>Correlations</figcaption><svg class="plot"></svg></figure>
+        <figure class="panel" id="p-net"><figcaption>Correlation network</figcaption><svg class="plot"></svg></figure>
+        <figure class="panel" id="p-pcor"><figcaption>Partial correlation network</figcaption><svg class="plot"></svg></figure>
+      </div>
+      <div id="readout" class="readout">Hover a cell, line or point to read its value.</div>
+    </section>
+
+    <!-- ==================== MODEL CANVAS ==================== -->
+    <section id="canvas-pane" class="pane">
+      <div class="toolbar" role="toolbar" aria-label="Drawing tools">
+        <div class="tool-group">
+          <button class="tool on" data-tool="select" title="Select / move (V)">
+            <svg viewBox="0 0 24 24"><path d="M6 3 L6 19 L10.5 14.8 L13.6 21 L16.2 19.8 L13.2 13.7 L19 13.4 Z"/></svg><span>Move</span></button>
+          <button class="tool" id="btn-factor" data-tool="factor" title="Add a factor (F). With items selected: factor with loadings to them.">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none"/><path d="M12 8.5 V15.5 M8.5 12 H15.5"/></svg><span id="factor-label">Factor</span></button>
+          <button class="tool" data-tool="arrow" title="Draw a loading: drag from a factor to an item (A)">
+            <svg viewBox="0 0 24 24"><path d="M4 20 L17 7" fill="none"/><path d="M19.5 4.5 L11.5 7.5 L16.5 12.5 Z"/></svg><span>Loading</span></button>
+          <button class="tool" data-tool="cov" title="Draw a correlation between two items or two factors (C)">
+            <svg viewBox="0 0 24 24"><path d="M6.5 16 Q12 4 17.5 16" fill="none"/><path d="M3.5 17.5 L9.5 18.5 L6.5 12.5 Z M20.5 17.5 L14.5 18.5 L17.5 12.5 Z"/></svg><span>Correlate</span></button>
+          <button class="tool" data-tool="erase" title="Erase factors and paths (E)">
+            <svg viewBox="0 0 24 24"><path d="M4 16 L12.5 7.5 L18.5 13.5 L12 20 H7 Z" fill="none"/><path d="M12 20 H20"/></svg><span>Erase</span></button>
+        </div>
+        <div class="tool-group actions">
+          <button class="act" id="btn-undo" title="Undo (Ctrl/Cmd+Z)"><svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M4 12 H14 A6 6 0 0 1 14 24" fill="none"/></svg><span>Undo</span></button>
+          <button class="act" id="btn-tidy" title="Tidy layout (T)"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="3" fill="none"/><rect x="3" y="15" width="5" height="5" fill="none"/><rect x="9.5" y="15" width="5" height="5" fill="none"/><rect x="16" y="15" width="5" height="5" fill="none"/></svg><span>Tidy</span></button>
+          <button class="act" id="btn-values" title="Show/hide estimates"><svg viewBox="0 0 24 24"><text x="12" y="16" text-anchor="middle" font-size="11" font-family="IBM Plex Mono, monospace" stroke="none">.72</text></svg><span>Values</span></button>
+          <button class="act" id="btn-clear" title="Remove all factors and paths"><svg viewBox="0 0 24 24"><path d="M5 7 H19 M9 7 V4 H15 V7 M7 7 L8 20 H16 L17 7" fill="none"/></svg><span>Clear</span></button>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <svg id="canvas" data-tool="select"></svg>
+        <svg id="truth-canvas" class="hidden"></svg>
+        <div id="truth-seg" class="seg small hidden">
+          <button data-show="mine" class="on">Your model</button>
+          <button data-show="truth">True model</button>
+        </div>
+        <div id="canvas-hint">
+          <b>Click items</b> to select them, then press <b>+ Factor</b>.<br>
+          Or pick <b>Loading</b> / <b>Correlate</b> and drag between nodes.
+        </div>
+        <div id="toast" role="status" aria-live="polite"></div>
+      </div>
+      <!-- results strip (fit results + reveal), in flow below the canvas -->
+      <div id="results" class="results hidden" aria-live="polite">
+        <div class="res-head">
+          <span id="res-title" class="res-title">Fit results</span>
+          <button id="res-min" class="res-min" aria-label="Minimise">&#8211;</button>
+        </div>
+        <div id="res-body" class="res-body"></div>
+      </div>
+      <div class="canvas-foot">
+        <div id="model-info" class="model-info"></div>
+        <button id="btn-fit" class="fit-btn"><span class="fit-label">FIT</span></button>
+      </div>
+
+    </section>
+  </main>
+</div>
+
+<!-- ==================== TITLE ==================== -->
+<div id="screen-title" class="overlay show">
+  <div class="title-wrap">
+    <div class="title-kicker">a Galvoro capsule &middot; structural equation modeling</div>
+    <h1 class="title-name">FACTOR<br>FIND</h1>
+    <div class="title-tag">Two hundred people. A handful of items. Some hidden factors.<br>Can you draw the model that made the data?</div>
+    <svg class="title-art" viewBox="0 0 520 190" aria-hidden="true">
+      <!-- left: a correlation network -->
+      <g class="ta-net">
+        <line x1="40" y1="60" x2="95" y2="35" stroke="#0000D5" stroke-width="7"/>
+        <line x1="40" y1="60" x2="70" y2="115" stroke="#3333DD" stroke-width="5"/>
+        <line x1="95" y1="35" x2="70" y2="115" stroke="#4D4DE2" stroke-width="4"/>
+        <line x1="70" y1="115" x2="140" y2="140" stroke="#B3B3F2" stroke-width="2"/>
+        <line x1="140" y1="140" x2="175" y2="85" stroke="#0000D5" stroke-width="7"/>
+        <line x1="175" y1="85" x2="200" y2="150" stroke="#2626DA" stroke-width="5"/>
+        <line x1="140" y1="140" x2="200" y2="150" stroke="#4040E0" stroke-width="5"/>
+        <line x1="95" y1="35" x2="175" y2="85" stroke="#E5B3B3" stroke-width="2"/>
+        <circle cx="40" cy="60" r="13"/><circle cx="95" cy="35" r="13"/><circle cx="70" cy="115" r="13"/>
+        <circle cx="140" cy="140" r="13"/><circle cx="175" cy="85" r="13"/><circle cx="200" cy="150" r="13"/>
+      </g>
+      <path class="ta-arrow" d="M232 95 H282" />
+      <path class="ta-arrowhead" d="M290 95 L278 88 L278 102 Z" />
+      <!-- right: the path diagram -->
+      <g class="ta-path">
+        <path d="M348 30 Q400 2 452 30" fill="none" stroke="#5C5CE5" stroke-width="3"/>
+        <line x1="345" y1="62" x2="318" y2="140" stroke="#0000D5" stroke-width="5"/>
+        <line x1="352" y1="64" x2="350" y2="140" stroke="#1A1AD8" stroke-width="4.5"/>
+        <line x1="358" y1="62" x2="382" y2="140" stroke="#3939DF" stroke-width="4"/>
+        <line x1="445" y1="62" x2="418" y2="140" stroke="#0000D5" stroke-width="5"/>
+        <line x1="452" y1="64" x2="450" y2="140" stroke="#2C2CDC" stroke-width="4"/>
+        <line x1="458" y1="62" x2="482" y2="140" stroke="#4A4AE2" stroke-width="3.5"/>
+        <circle cx="352" cy="44" r="20"/><circle cx="452" cy="44" r="20"/>
+        <rect x="304" y="142" width="28" height="28"/><rect x="336" y="142" width="28" height="28"/><rect x="368" y="142" width="28" height="28"/>
+        <rect x="404" y="142" width="28" height="28"/><rect x="436" y="142" width="28" height="28"/><rect x="468" y="142" width="28" height="28"/>
+      </g>
+    </svg>
+    <div class="title-buttons">
+      <button id="btn-play" class="title-btn play">PLAY</button>
+      <button id="btn-learn" class="title-btn learn" disabled title="LEARN mode is coming soon">LEARN<small>coming soon</small></button>
+    </div>
+    <div class="title-credits">a Galvoro Capsule &middot; Sacha Epskamp<span>Claude (code)</span></div>
+  </div>
+</div>
+
+<!-- ==================== TUTORIAL ==================== -->
+<div id="screen-tutorial" class="overlay">
+  <div class="tut-wrap">
+    <button id="tut-close" class="tut-close" aria-label="Close">&#10005;</button>
+    <h2 class="tut-header">HOW TO PLAY</h2>
+    <div id="tut-cards" class="tut-cards"></div>
+    <button id="tut-continue" class="tut-btn">START</button>
+  </div>
+</div>
+
+<!-- ==================== FINAL ==================== -->
+<div id="screen-final" class="overlay">
+  <div class="final-wrap">
+    <div class="final-kicker">GAME OVER</div>
+    <div id="final-score" class="final-score">0</div>
+    <div id="final-rank" class="final-rank"></div>
+    <div class="final-table-wrap"><table id="final-table" class="final-table"></table></div>
+    <div class="final-buttons">
+      <button id="btn-again" class="title-btn play">PLAY AGAIN</button>
+      <button id="btn-final-home" class="title-btn ghost">TITLE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== R CODE ==================== -->
+<div id="modal-r" class="overlay modal">
+  <div class="modal-card">
+    <div class="modal-head"><span>Check this fit in R (lavaan)</span><button id="r-close" class="icon-btn" aria-label="Close">&#10005;</button></div>
+    <p class="modal-note">Paste into R. The sample covariance matrix uses the usual N&nbsp;&minus;&nbsp;1 denominator; lavaan rescales it, so &chi;&sup2;, fit indices and standardized estimates match this game.</p>
+    <textarea id="r-code" readonly spellcheck="false"></textarea>
+    <div class="modal-foot"><button id="r-copy" class="pill-btn">Copy</button></div>
+  </div>
+</div>
+
+<!-- ==================== QUIT CONFIRM ==================== -->
+<div id="modal-quit" class="overlay modal">
+  <div class="modal-card small">
+    <div class="modal-head"><span>Leave this game?</span></div>
+    <p class="modal-note">Your score for this game will be lost.</p>
+    <div class="modal-foot">
+      <button id="quit-stay" class="pill-btn ghost">Stay</button>
+      <button id="quit-leave" class="pill-btn">Leave</button>
+    </div>
+  </div>
+</div>
+
+<script src="linalg.js"></script>
+<script src="sem.js"></script>
+<script src="bank.js"></script>
+<script src="plots.js"></script>
+<script src="editor.js"></script>
+<script src="tutorial.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
