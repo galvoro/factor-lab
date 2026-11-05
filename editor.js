@@ -606,6 +606,19 @@
         lastTap = { t: now, x, y, items: [...S.sel].filter(id => id[0] === 'o') };
       } else lastTap = null;
 
+      // LEARN: clicking a path (or a residual) opens its value, whatever the
+      // drawing tool (except Erase); with Loading / Correlate the residual
+      // circle stays a handle for drawing residual correlations
+      if (S.learn && !n && tool !== 'erase') {
+        const ro = eid ? null : residFromTarget(ev.target) || (tool === 'select' || tool === 'factor' ? hitResid(x, y, 6) : null);
+        if (eid || ro) {
+          pending = null; drag = null; lastTap = null;
+          S.sel.clear(); S.sel.add(eid || 'v:' + ro.id); render();
+          if (opts.onParam) opts.onParam(eid ? { type: 'edge', id: eid } : { type: 'obs', id: ro.id }, ev);
+          return;
+        }
+      }
+
       if (tool === 'erase') {
         if (n && n.kind === 'lat') removeIds([n.id]);
         else if (n && n.kind === 'obs' && S.learn) removeObs(n.id);
