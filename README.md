@@ -7,8 +7,8 @@ simulated from a hidden factor model: from no factors at all up to 15 items,
 correlations. The player reads the correlational structure on the left (scree
 plot, heatmap, correlation network, regularized partial correlation network),
 draws a path diagram on the right and presses FIT once per dataset. The game
-ends with a diploma: medal by level (bronze / silver / gold / platinum), stars
-by score.
+ends with a diploma (at least 60 / 100): medal by level (bronze / silver /
+gold / platinum), stars by score.
 
 LEARN mode is not built yet (button shows "coming soon").
 
@@ -43,11 +43,13 @@ So the true structure always scores 100, and nothing in it is undetectable.
 
 * One FIT per dataset. Not identified / not converged / improper (Heywood) →
   red error card, not counted.
-* Fit (40): χ² p ≥ .05 / ≥ .01, RMSEA < .05 / < .08, CFI ≥ .95 / ≥ .90,
-  SRMR < .08 / < .10 → 10 / 5 points each. df = 0 → no fit points.
-* Parsimony (60): 60 − 3 × max(0, BIC(player) − BIC(true structure)).
-* `CONFIG.ROUNDS` = 5 datasets per game, then the diploma (stars at 60 / 80 /
-  95% of the maximum). `CONFIG.LEVELS` sets each level's medal and the sample
+* Each dataset is worth 20 points (one decimal), a game of five 100.
+* Fit (8): χ² p ≥ .05 / ≥ .01, RMSEA < .05 / < .08, CFI ≥ .95 / ≥ .90,
+  SRMR < .08 / < .10 → 2 / 1 points each. df = 0 → no fit points.
+* Parsimony (12): 12 − 0.6 × max(0, BIC(player) − BIC(true structure)).
+* `CONFIG.ROUNDS` = 5 datasets per game, then the diploma if the total is at
+  least 60 / 100 (`CONFIG.DIPLOMA`): no stars at 60, one at 70, two at 80,
+  three at 90. Below 60 a "No diploma this time" sheet with a NOT AWARDED stamp. `CONFIG.LEVELS` sets each level's medal and the sample
   sizes drawn (Psychometrika: N = 300–1000).
 * An empty canvas fits the baseline (independence) model after a confirming
   second press of FIT.

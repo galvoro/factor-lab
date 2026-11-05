@@ -725,6 +725,24 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
 .dip-exact { color: var(--green); font-weight: 700; }
 .dip-foot { display: flex; justify-content: space-between; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 15px; color: #6B5326; margin-top: 8px; padding: 0 6px; }
 .final-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+/* no diploma: faded paper, grey seal, red stamp */
+.diploma.failed { border-color: #8E8A82; background: #F7F6F2; }
+.diploma.failed .dip-inner { border-color: #C9C4B8; outline-color: #C9C4B8; background: none; }
+.diploma.failed .dip-corner { border-color: #C9C4B8; }
+.diploma.failed .dip-title { color: #6F6A60; font-size: clamp(34px, 7vw, 54px); }
+.diploma.failed .dip-name { display: none; }
+.diploma.failed .dip-seal .medal { filter: grayscale(1); opacity: 0.3; }
+.diploma.failed .dip-rank { color: var(--bad-deep); font-size: 20px; }
+.diploma.failed .dip-score { color: #5A554C; }
+.dip-seal { position: relative; }
+.seal-stamp {
+  position: absolute; top: 44%; left: 50%; transform: translate(-50%, -50%) rotate(-16deg);
+  border: 4px solid var(--bad); border-radius: 8px; padding: 4px 10px; line-height: 1.05; text-align: center;
+  color: var(--bad); font-family: var(--f-head); font-weight: 700; font-size: 19px; letter-spacing: 0.1em;
+  background: rgba(247, 246, 242, 0.55); pointer-events: none;
+  animation: stampIn 0.45s 0.9s cubic-bezier(.3,1.6,.5,1) both;
+}
+@keyframes stampIn { from { opacity: 0; transform: translate(-50%, -50%) rotate(-16deg) scale(2.2); } to { opacity: 1; transform: translate(-50%, -50%) rotate(-16deg) scale(1); } }
 
 /* ============================================================
    Phones / portrait: tabbed layout

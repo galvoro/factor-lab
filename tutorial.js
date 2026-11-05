@@ -15,10 +15,10 @@
         '<b>Erase</b> removes paths. Double-click a factor to change its items.' },
     { title: 'ONE FIT', c: '#2E8B57',
       body: 'Five datasets per game, <b>one FIT</b> each. If the model cannot be estimated, fix it and try again for free. ' +
-        'Then compare the model with the data. A diploma awaits at the end.' },
+        'Then compare the model with the data.' },
     { title: 'SCORING', c: '#79808C',
-      body: '<b>Fit (40):</b> χ² test, RMSEA, CFI and SRMR give 10 points each if good, 5 if acceptable. ' +
-        '<b>Parsimony (60):</b> −3 per BIC point above the true model.' },
+      body: 'Each dataset is worth 20 points. <b>Fit (8):</b> χ² test, RMSEA, CFI and SRMR give 2 points each if good, 1 if acceptable. ' +
+        '<b>Parsimony (12):</b> −0.6 per BIC point above the true model. A diploma needs 60 of 100.' },
   ];
 
   let onDone = null;

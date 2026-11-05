@@ -17,29 +17,29 @@
   const CRITERIA = [
     { key: 'chisq', name: 'χ² test', sub: 'exact fit', value: (r) => r.pvalue,
       main: (r) => 'p ' + fmtP(r.pvalue), small: (r) => `χ²(${r.df}) = ${r.chisq.toFixed(1)}`,
-      tiers: [{ test: (v) => v >= 0.05, cls: 'good', pts: 10, label: 'Not rejected' },
-              { test: (v) => v >= 0.01, cls: 'ok', pts: 5, label: 'Borderline' }],
+      tiers: [{ test: (v) => v >= 0.05, cls: 'good', pts: 2, label: 'Not rejected' },
+              { test: (v) => v >= 0.01, cls: 'ok', pts: 1, label: 'Borderline' }],
       fail: 'Rejected',
       axis: { log: true, min: 0.001, max: 1, ticks: [[0.001, '.001'], [0.01, '.01'], [0.05, '.05'], [1, '1']],
               zones: [['bad', 0.001, 0.01], ['ok', 0.01, 0.05], ['good', 0.05, 1]] } },
     { key: 'rmsea', name: 'RMSEA', sub: 'approximation error', value: (r) => r.rmsea,
       main: (r) => f3(r.rmsea), small: () => '',
-      tiers: [{ test: (v) => v < 0.05, cls: 'good', pts: 10, label: 'Close fit' },
-              { test: (v) => v < 0.08, cls: 'ok', pts: 5, label: 'Acceptable' }],
+      tiers: [{ test: (v) => v < 0.05, cls: 'good', pts: 2, label: 'Close fit' },
+              { test: (v) => v < 0.08, cls: 'ok', pts: 1, label: 'Acceptable' }],
       fail: 'Poor fit',
       axis: { min: 0, max: 0.15, ticks: [[0, '0'], [0.05, '.05'], [0.08, '.08'], [0.15, '.15']],
               zones: [['good', 0, 0.05], ['ok', 0.05, 0.08], ['bad', 0.08, 0.15]] } },
     { key: 'cfi', name: 'CFI', sub: 'vs. no correlations', value: (r) => Math.min(1, r.cfi),
       main: (r) => f3(Math.min(1, r.cfi)), small: () => '',
-      tiers: [{ test: (v) => v >= 0.95, cls: 'good', pts: 10, label: 'Good' },
-              { test: (v) => v >= 0.90, cls: 'ok', pts: 5, label: 'Acceptable' }],
+      tiers: [{ test: (v) => v >= 0.95, cls: 'good', pts: 2, label: 'Good' },
+              { test: (v) => v >= 0.90, cls: 'ok', pts: 1, label: 'Acceptable' }],
       fail: 'Poor',
       axis: { min: 0.8, max: 1, ticks: [[0.8, '.80'], [0.9, '.90'], [0.95, '.95'], [1, '1']],
               zones: [['bad', 0.8, 0.9], ['ok', 0.9, 0.95], ['good', 0.95, 1]] } },
     { key: 'srmr', name: 'SRMR', sub: 'residual correlations', value: (r) => r.srmr,
       main: (r) => f3(r.srmr), small: () => '',
-      tiers: [{ test: (v) => v < 0.08, cls: 'good', pts: 10, label: 'Good' },
-              { test: (v) => v < 0.10, cls: 'ok', pts: 5, label: 'Acceptable' }],
+      tiers: [{ test: (v) => v < 0.08, cls: 'good', pts: 2, label: 'Good' },
+              { test: (v) => v < 0.10, cls: 'ok', pts: 1, label: 'Acceptable' }],
       fail: 'Poor',
       axis: { min: 0, max: 0.15, ticks: [[0, '0'], [0.08, '.08'], [0.10, '.10'], [0.15, '.15']],
               zones: [['good', 0, 0.08], ['ok', 0.08, 0.10], ['bad', 0.10, 0.15]] } },
@@ -47,8 +47,9 @@
 
   const CONFIG = {
     ROUNDS: 5,                                // datasets per game, then the diploma
-    BIC_MAX: 60,                              // parsimony points ...
-    BIC_COST: 3,                              // ... minus this per BIC point above the true model
+    BIC_MAX: 12,                              // parsimony points ...
+    BIC_COST: 0.6,                            // ... minus this per BIC point above the true model
+    DIPLOMA: { pass: 60, stars: [70, 80, 90] },   // % of the game maximum (5 x 20 = 100)
     SUPPORT_BIC: 2,                           // every feature of the truth must be worth >= 2 BIC
     RESID_MAX: 0.25,                          // colour scale for residual correlations
     RESID_MAX_P: 0.35,                        // ... and residual partial correlations
@@ -61,7 +62,9 @@
     CRITERIA,
   };
   const FIT_MAX = CRITERIA.reduce((s, c) => s + c.tiers[0].pts, 0);
-  const MAX_ROUND = FIT_MAX + CONFIG.BIC_MAX;
+  const MAX_ROUND = FIT_MAX + CONFIG.BIC_MAX;           // 8 + 12 = 20 per dataset
+  const round1 = (v) => Math.round(v * 10) / 10;
+  const fmtPts = (v) => round1(v).toFixed(1);
   // the true model must reach the top tier of every criterion on its sample
   const acceptTrue = (f) => CRITERIA.every(c => c.tiers[0].test(c.value(f)));
 
@@ -400,7 +403,7 @@
     $('hud-level').textContent = CONFIG.LEVELS[G.level].name;
     if (CONFIG.ROUNDS > 1) {
       $('hud-l2').textContent = 'ROUND'; $('hud-v2').textContent = `${G.round + 1}/${CONFIG.ROUNDS}`;
-      $('hud-l3').textContent = 'SCORE'; $('hud-v3').textContent = String(G.rounds.reduce((s, r) => s + r.total, 0));
+      $('hud-l3').textContent = 'SCORE'; $('hud-v3').textContent = fmtPts(G.rounds.reduce((s, r) => s + r.total, 0));
     } else {
       $('hud-l2').textContent = 'PLAYED'; $('hud-v2').textContent = String(G.played.length);
       $('hud-l3').textContent = 'AVERAGE';
@@ -510,9 +513,9 @@
     const cmp = FF.bank.compareStructure(c.data.spec, spec);
     let dBIC = res.bic - c.data.trueFit.bic;
     if (cmp.exact) dBIC = 0;
-    const bicPts = Math.max(0, Math.round(CONFIG.BIC_MAX - CONFIG.BIC_COST * Math.max(0, dBIC)));
-    const bicCls = bicPts >= CONFIG.BIC_MAX - 6 ? 'good' : bicPts >= CONFIG.BIC_MAX / 2 ? 'ok' : 'bad';
-    return { rows, saturated, fitPts, dBIC, bicPts, bicCls, total: fitPts + bicPts, cmp };
+    const bicPts = Math.max(0, round1(CONFIG.BIC_MAX - CONFIG.BIC_COST * Math.max(0, dBIC)));
+    const bicCls = bicPts >= CONFIG.BIC_MAX - 2 * CONFIG.BIC_COST ? 'good' : bicPts >= CONFIG.BIC_MAX / 2 ? 'ok' : 'bad';
+    return { rows, saturated, fitPts, dBIC, bicPts, bicCls, total: round1(fitPts + bicPts), cmp };
   }
 
   let busy = false, emptyArmed = 0;
@@ -723,7 +726,7 @@
           <span class="bic-cmp">BIC yours <b>${r.bic.toFixed(1)}</b> &middot; true model <b>${c.data.trueFit.bic.toFixed(1)}</b> &middot; Δ <b>${sign(sc.dBIC)}</b></span>
         </div>
         <div class="bic-bar"><span class="bic-fill" id="bic-fill"></span></div>
-        <div class="bic-foot"><span>&minus;${CONFIG.BIC_COST} points per BIC point above the true model</span><b><span id="bic-pts">${CONFIG.BIC_MAX}</span> / ${CONFIG.BIC_MAX}</b></div>
+        <div class="bic-foot"><span>&minus;${CONFIG.BIC_COST} points per BIC point above the true model</span><b><span id="bic-pts">${fmtPts(CONFIG.BIC_MAX)}</span> / ${CONFIG.BIC_MAX}</b></div>
       </div>
       <div class="total-block" id="total-block">
         <div class="total-num"><span id="total-num">0</span><small> / ${MAX_ROUND}</small></div>
@@ -776,29 +779,29 @@
         f.style.width = (sc.bicPts / CONFIG.BIC_MAX * 100).toFixed(1) + '%';
         f.classList.add(sc.bicCls);
       });
-      countUp($('bic-pts'), CONFIG.BIC_MAX, sc.bicPts, 900);
+      countUp($('bic-pts'), CONFIG.BIC_MAX, sc.bicPts, 900, 1);
     } });
     steps.push({ wait: 950, fn: (fast) => {
       $('bic-block').classList.add('done');
-      $('bic-pts').textContent = String(sc.bicPts);
+      $('bic-pts').textContent = fmtPts(sc.bicPts);
       if (!fast) SFX(sc.bicCls === 'good' ? 'close' : sc.bicCls === 'ok' ? 'fair' : 'poor');
     } });
     steps.push({ wait: 400, fn: (fast) => {
       $('total-block').classList.add('in');
-      if (fast) $('total-num').textContent = String(sc.total);
-      else countUp($('total-num'), 0, sc.total, 700);
+      if (fast) $('total-num').textContent = fmtPts(sc.total);
+      else countUp($('total-num'), 0, sc.total, 700, 1);
     } });
     steps.push({ wait: 700, fn: (fast) => {
-      $('total-num').textContent = String(sc.total);
+      $('total-num').textContent = fmtPts(sc.total);
       $('card-btns').classList.add('in');
       $('card-foot').classList.add('in');
       const sh = $('skip-hint'); if (sh) sh.remove();
-      $('score-chip-val').textContent = String(sc.total);
+      $('score-chip-val').textContent = fmtPts(sc.total);
       if (!fit.recorded) {
         fit.recorded = true;
         recordRound();
         if (!fast) {
-          if (sc.cmp.exact) SFX('levelup'); else if (sc.total >= 80) SFX('coin');
+          if (sc.cmp.exact) SFX('levelup'); else if (sc.total >= 0.8 * MAX_ROUND) SFX('coin');
         }
       }
     } });
@@ -811,13 +814,13 @@
   });
 
   let countTimer = null;
-  function countUp(el, from, to, dur) {
+  function countUp(el, from, to, dur, dec) {
     cancelAnimationFrame(countTimer);
-    const t0 = performance.now();
+    const t0 = performance.now(), d = dec || 0;
     const step = (now) => {
       const t = Math.min(1, (now - t0) / dur);
-      el.textContent = String(Math.round(from + (to - from) * (1 - Math.pow(1 - t, 2))));
-      if (t < 1 && !seq.fast) countTimer = requestAnimationFrame(step); else el.textContent = String(to);
+      el.textContent = (from + (to - from) * (1 - Math.pow(1 - t, 2))).toFixed(d);
+      if (t < 1 && !seq.fast) countTimer = requestAnimationFrame(step); else el.textContent = to.toFixed(d);
     };
     countTimer = requestAnimationFrame(step);
   }
@@ -921,26 +924,33 @@
   function showFinal() {
     const lv = CONFIG.LEVELS[G.level];
     const max = CONFIG.ROUNDS * MAX_ROUND;
-    const total = G.rounds.reduce((s, r) => s + r.total, 0);
-    const frac = total / max;
-    const nStars = frac >= 0.95 ? 3 : frac >= 0.8 ? 2 : frac >= 0.6 ? 1 : 0;
-    $('dip-level').textContent = lv.name;
-    $('final-score').innerHTML = `<span id="dip-num">0</span><small> / ${max}</small>`;
-    $('dip-stars').innerHTML = [0, 1, 2].map(k => smallStar(k < nStars)).join('');
-    $('final-rank').textContent = rankFor(total / CONFIG.ROUNDS, false);
-    $('dip-seal').innerHTML = medalSVG(lv.medal, 118, true) + `<div class="seal-label">${METALS[lv.medal].name.toUpperCase()}</div>`;
-    const rows = G.rounds.map((r, k) => `<tr><td>${k + 1}</td><td>${r.tpl.name}${r.exact ? ' <span class="dip-exact" title="exact structure">✓</span>' : ''}</td><td>${r.N}</td><td>${r.fitPts}</td><td>${r.bicPts}</td><td>${r.total}</td></tr>`).join('');
+    const total = round1(G.rounds.reduce((s, r) => s + r.total, 0));
+    const pct = 100 * total / max;
+    const D = CONFIG.DIPLOMA;
+    const passed = pct >= D.pass - 1e-9;
+    const nStars = D.stars.filter(s => pct >= s - 1e-9).length;
+    const d = $('diploma');
+    d.classList.toggle('failed', !passed);
+    $('dip-title').textContent = passed ? 'Diploma' : 'No diploma this time';
+    $('dip-line1').textContent = passed ? 'This certifies that' : 'Almost there';
+    $('dip-line2').innerHTML = (passed ? 'completed the' : 'You played the') + ` <b>${lv.name}</b> track of five datasets with a score of`;
+    $('final-score').innerHTML = `<span id="dip-num">0.0</span><small> / ${max}</small>`;
+    $('dip-stars').innerHTML = passed ? [0, 1, 2].map(k => smallStar(k < nStars)).join('') : '';
+    $('final-rank').textContent = passed ? rankFor(total / CONFIG.ROUNDS, false) : `A diploma needs ${round1(D.pass * max / 100)} points.`;
+    $('dip-seal').innerHTML = medalSVG(lv.medal, 118, true) +
+      (passed ? `<div class="seal-label">${METALS[lv.medal].name.toUpperCase()}</div>` : '<div class="seal-label">&nbsp;</div><div class="seal-stamp">NOT<br>AWARDED</div>');
+    const rows = G.rounds.map((r, k) => `<tr><td>${k + 1}</td><td>${r.tpl.name}${r.exact ? ' <span class="dip-exact" title="exact structure">✓</span>' : ''}</td><td>${r.N}</td><td>${r.fitPts}</td><td>${fmtPts(r.bicPts)}</td><td>${fmtPts(r.total)}</td></tr>`).join('');
     $('final-table').innerHTML = `<tr><th>#</th><th>True model</th><th>N</th><th>Fit</th><th>Parsimony</th><th>Points</th></tr>${rows}`;
     $('dip-date').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    $('btn-again').textContent = passed ? 'PLAY AGAIN' : 'TRY AGAIN';
     hideCard(true);
     closeModal('modal-truth');
     showOverlay('screen-final');
     G.screen = 'final';
-    const d = $('diploma');
     d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
     seq.fast = false;
-    setTimeout(() => countUp($('dip-num'), 0, total, 1100), 450);
-    setTimeout(() => SFX(nStars >= 2 ? 'levelup' : 'close'), 500);
+    setTimeout(() => countUp($('dip-num'), 0, total, 1100, 1), 450);
+    setTimeout(() => SFX(!passed ? 'poor' : nStars >= 2 ? 'levelup' : 'close'), 500);
   }
 
   // ------------------------------------------------------------------
@@ -1106,5 +1116,5 @@
 
   updateHUD();
   FF.game.CONFIG = CONFIG;
-  FF.game.debug = { startGame, startRound, editor, truthView, scoreFit, skipSeq, showScoreCard, showError, openTruth, acceptTrue, afterRound };
+  FF.game.debug = { startGame, startRound, editor, truthView, scoreFit, skipSeq, showScoreCard, showError, openTruth, acceptTrue, afterRound, showFinal };
 })(window);
