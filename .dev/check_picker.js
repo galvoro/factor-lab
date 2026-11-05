@@ -1,6 +1,7 @@
 // Indicator picker: for a grid of double-click spots at several screen sizes,
 // count how often the popup covers an item (should be 0 everywhere).
 //   node .dev/check_picker.js [baseURL] [screenshotPrefix]
+const { launch, sleep } = require('./cdp.js');
 const BASE = process.argv[2] || 'http://127.0.0.1:8765/';
 const SHOT = process.argv[3];
 const VPS = [
