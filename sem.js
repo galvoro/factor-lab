@@ -405,7 +405,19 @@
     return lines.join('\n');
   }
 
-  function rCode(spec, S, N) {
+  // Order each factor's indicators so the one with the largest positive
+  // standardized loading comes first: lavaan (std.lv = TRUE) keeps the first
+  // indicator positive, so its solution then has the same signs as this game.
+  function orderForLavaan(spec, res) {
+    if (!res || !res.est) return spec;
+    const std = (mat, r, c) => { const e = res.est.find(x => x.mat === mat && x.r === r && x.c === c); return e ? e.std : 0; };
+    const loadings = spec.loadings.slice().sort((a, b) => a[1] - b[1] || std('L', b[0], b[1]) - std('L', a[0], a[1]));
+    const regressions = (spec.regressions || []).slice().sort((a, b) => a[1] - b[1] || std('B', b[0], b[1]) - std('B', a[0], a[1]));
+    return Object.assign({}, spec, { loadings, regressions });
+  }
+
+  function rCode(spec, S, N, res) {
+    spec = orderForLavaan(spec, res);
     const p = spec.p;
     const Su = S.map(r => r.map(v => v * N / (N - 1)));
     const rows = Su.map((r, i) => '  ' + r.map(v => v.toFixed(6).padStart(10)).join(',') + (i < p - 1 ? ',' : ''));

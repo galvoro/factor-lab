@@ -425,7 +425,7 @@
       fitBtn.classList.remove('busy');
       canvasWrap.classList.remove('estimating');
       const fp = fitPoints(res);
-      c.fits.push({ res, key, fp, spec, rcode: FF.sem.rCode(spec, c.data.S, CONFIG.N) });
+      c.fits.push({ res, key, fp, spec, rcode: FF.sem.rCode(spec, c.data.S, CONFIG.N, res) });
       c.last = res; c.lastKey = key; c.lastDash = null;
       editor.setFitResult(res);
       document.querySelectorAll('#view-seg button').forEach(b => { b.disabled = false; });
