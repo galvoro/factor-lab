@@ -144,12 +144,10 @@
     for (const [i, j, v] of edges) {
       const a = Math.min(1, Math.abs(v) / maximum);
       const width = Math.max(1, a * (esize - 1) + 1);
+      // centre to centre: the (opaque) nodes drawn afterwards hide the line ends
       const [x1, y1] = P[i], [x2, y2] = P[j];
-      const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
-      const ux = dx / L, uy = dy / L;
-      const k = r / Math.max(Math.abs(ux), Math.abs(uy), 1e-9);   // square node boundary
       const line = el('line', {
-        x1: x1 + ux * k, y1: y1 + uy * k, x2: x2 - ux * k, y2: y2 - uy * k,
+        x1, y1, x2, y2,
         stroke: weightColor(v, maximum), 'stroke-width': width.toFixed(2),
         'stroke-linecap': 'butt', class: 'net-edge',
       }, gE);
