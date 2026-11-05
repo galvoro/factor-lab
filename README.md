@@ -10,7 +10,14 @@ draws a path diagram on the right and presses FIT once per dataset. The game
 ends with a diploma (at least 60 / 100): medal by level (bronze / silver /
 gold / platinum), stars by score.
 
-LEARN mode is not built yet (button shows "coming soon").
+LEARN mode has no data, fitting or score: start from six unconnected items,
+draw any model, click a path (or the circle under an item) to set its value
+with a slider, add items with "+ Item" and erase them with Erase. The left side
+shows the exact correlations the model implies (scree plot, heatmap, correlation
+and partial correlation networks), updated live; values that imply a
+non-positive-definite matrix grey the panels out with a warning. Metric: factor
+(residual) variances fixed to 1; defaults loading 1, factor correlation / regression
+.5, residual variance 1, residual covariance .3 (`DEFAULTS` in `editor.js`).
 
 ## Files
 

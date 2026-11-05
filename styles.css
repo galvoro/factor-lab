@@ -763,6 +763,41 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
 }
 @keyframes stampIn { from { opacity: 0; transform: translate(-50%, -50%) rotate(-16deg) scale(2.2); } to { opacity: 1; transform: translate(-50%, -50%) rotate(-16deg) scale(1); } }
 
+
+/* ============================================================
+   LEARN mode
+   ============================================================ */
+body:not(.mode-learn) .learn-only { display: none !important; }
+body.mode-learn .play-only { display: none !important; }
+body.mode-learn #btn-fit { display: none; }
+#label-seg { margin-left: auto; }
+.d-resid-hit { fill: transparent; cursor: pointer; }
+.d-resid.sel .d-resid-line, .d-resid.sel .d-head { filter: drop-shadow(0 0 3px var(--amber)); }
+.d-resid.sel .d-resid-val { fill: var(--amber-deep); font-weight: 700; }
+.param-pop {
+  position: absolute; z-index: 7; width: 270px;
+  background: var(--card); border: 2px solid var(--amber); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 10px 12px 11px;
+  animation: cardPop 0.2s cubic-bezier(.2,.9,.3,1.15);
+}
+.pr-sub { font-size: 12px; color: var(--ink-2); margin: 1px 0 8px; }
+.pr-row { display: flex; align-items: center; gap: 10px; }
+.pr-row input[type="range"] { flex: 1; accent-color: var(--amber-deep); }
+.pr-row input[type="number"] {
+  width: 72px; font-family: var(--f-mono); font-size: 14px; padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--paper);
+  -webkit-user-select: text; user-select: text;
+}
+.pr-std { font-size: 12px; color: var(--muted); min-height: 17px; margin: 6px 0 8px; }
+.pr-std b { font-family: var(--f-mono); color: var(--ink); }
+#dash.impossible .dash-grid { opacity: 0.25; filter: grayscale(1); }
+.learn-warn {
+  position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); z-index: 5;
+  width: min(380px, 90%); background: var(--card); border: 2px solid var(--bad); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 12px 14px; font-size: 13px; line-height: 1.45; color: var(--ink-2);
+}
+.learn-warn b { display: block; font-family: var(--f-head); font-size: 15px; color: var(--bad-deep); margin-bottom: 3px; }
+
 /* ============================================================
    Phones / portrait: tabbed layout
    ============================================================ */
@@ -801,6 +836,8 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
   .tool-group.actions { margin-left: auto; padding: 0; }
   .fit-btn { min-width: 116px; height: 46px; font-size: 18px; }
   .canvas-wrap { min-height: 40%; }
+  .param-pop { width: calc(100% - 16px); }
+  #label-seg button { padding: 4px 8px; font-size: 11px; }
   #model-dash { overflow-y: auto; }
   .seg .long { display: none; } .seg .short { display: inline; }
   .res-bar { gap: 8px; }

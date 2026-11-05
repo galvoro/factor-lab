@@ -24,9 +24,10 @@
       <span class="brand-name">FACTOR FIND</span>
     </div>
     <div class="hud-stats">
-      <div class="stat"><span class="stat-label">LEVEL</span><span id="hud-level" class="stat-val small">Easy</span></div>
-      <div class="stat"><span class="stat-label" id="hud-l2">ROUND</span><span id="hud-v2" class="stat-val">1/5</span></div>
-      <div class="stat"><span class="stat-label" id="hud-l3">SCORE</span><span id="hud-v3" class="stat-val">0</span></div>
+      <div class="stat play-only"><span class="stat-label">LEVEL</span><span id="hud-level" class="stat-val small">Easy</span></div>
+      <div class="stat play-only"><span class="stat-label" id="hud-l2">ROUND</span><span id="hud-v2" class="stat-val">1/5</span></div>
+      <div class="stat play-only"><span class="stat-label" id="hud-l3">SCORE</span><span id="hud-v3" class="stat-val">0</span></div>
+      <div class="stat learn-only"><span class="stat-label">MODE</span><span class="stat-val small">Learn</span></div>
     </div>
     <div class="hud-btns">
       <button id="btn-help" class="icon-btn" aria-label="How to play" title="How to play">?</button>
@@ -37,7 +38,7 @@
 
   <!-- phone-only tab switcher -->
   <nav id="tabs">
-    <button data-tab="data" class="on">Data</button>
+    <button data-tab="data" class="on"><span id="tab-data-label">Data</span></button>
     <button data-tab="model"><span id="tab-model-label">Model</span></button>
   </nav>
 
@@ -45,7 +46,7 @@
     <!-- ==================== DATA DASHBOARD ==================== -->
     <section id="dash" class="pane dash">
       <div class="dash-head">
-        <span class="pane-title">DATA</span>
+        <span class="pane-title" id="dash-title">DATA</span>
         <span id="dash-note" class="dash-note">N = 200 &middot; 9 items</span>
       </div>
       <div class="dash-grid">
@@ -55,6 +56,10 @@
         <figure class="panel" data-p="pcor"><figcaption>Regularized partial correlation network</figcaption><svg class="plot"></svg></figure>
       </div>
       <div class="readout">Hover a cell, line or point to see its value.</div>
+      <div id="learn-warn" class="learn-warn hidden" role="alert">
+        <b>Impossible model</b>
+        These values imply a covariance matrix that cannot exist (it is not positive definite). Lower a correlation or covariance, or raise a residual variance.
+      </div>
     </section>
 
     <!-- ==================== MODEL PANE ==================== -->
@@ -75,6 +80,7 @@
         </div>
         <div class="tool-group actions">
           <button class="act" id="btn-undo" title="Undo (Ctrl/Cmd+Z)"><svg viewBox="0 0 24 24"><path d="M9 7 L4 12 L9 17 M4 12 H14 A6 6 0 0 1 14 24" fill="none"/></svg><span>Undo</span></button>
+          <button class="act learn-only" id="btn-add-item" title="Add an item (I)"><svg viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="15" height="15" fill="none"/><path d="M12 8.5 V15.5 M8.5 12 H15.5"/></svg><span>Item</span></button>
           <button class="act" id="btn-tidy" title="Tidy layout (T)"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="3" fill="none"/><rect x="3" y="15" width="5" height="5" fill="none"/><rect x="9.5" y="15" width="5" height="5" fill="none"/><rect x="16" y="15" width="5" height="5" fill="none"/></svg><span>Tidy</span></button>
           <button class="act" id="btn-clear" title="Remove all factors and paths"><svg viewBox="0 0 24 24"><path d="M5 7 H19 M9 7 V4 H15 V7 M7 7 L8 20 H16 L17 7" fill="none"/></svg><span>Clear</span></button>
         </div>
@@ -99,6 +105,13 @@
           <div class="pp-row"><span id="pp-count">0 items</span><span class="pp-links"><button class="link-btn" id="pp-all">All</button> &middot; <button class="link-btn" id="pp-none">None</button></span></div>
           <div class="pp-btns"><button class="pill-btn ghost" id="pp-cancel">Cancel</button><button class="pill-btn" id="pp-ok">OK</button></div>
         </div>
+        <div id="param-pop" class="param-pop hidden" role="dialog" aria-label="Parameter value">
+          <div class="pp-title" id="pr-title">Factor loading</div>
+          <div class="pr-sub" id="pr-sub"></div>
+          <div class="pr-row"><input type="range" id="pr-range" aria-label="Value"><input type="number" id="pr-num" aria-label="Value"></div>
+          <div class="pr-std" id="pr-std"></div>
+          <div class="pp-btns"><button class="pill-btn ghost" id="pr-reset">Default</button><button class="pill-btn" id="pr-done">Done</button></div>
+        </div>
         <div id="toast" role="status" aria-live="polite"></div>
       </div>
       <div id="model-dash" class="dash">
@@ -112,6 +125,10 @@
       </div>
       <div class="canvas-foot">
         <div id="model-info" class="model-info"></div>
+        <div class="seg small learn-only" id="label-seg" role="radiogroup" aria-label="Path labels">
+          <button data-labels="est" class="on" role="radio">Values</button>
+          <button data-labels="std" role="radio">Standardized</button>
+        </div>
         <button id="btn-score" class="score-btn" title="Show the fit results again">SCORE <b id="score-chip-val">0</b></button>
         <button id="btn-fit" class="fit-btn"><span class="fit-label">FIT</span></button>
       </div>
@@ -162,7 +179,7 @@
     </svg>
     <div class="title-buttons">
       <button id="btn-play" class="title-btn play">PLAY</button>
-      <button id="btn-learn" class="title-btn learn" disabled title="LEARN mode is coming soon">LEARN<small>coming soon</small></button>
+      <button id="btn-learn" class="title-btn learn">LEARN</button>
     </div>
     <div class="title-credits">a Galvoro Capsule &middot; Sacha Epskamp<span>Claude (code)</span></div>
   </div>

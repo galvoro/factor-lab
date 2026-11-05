@@ -21,6 +21,21 @@
         '<b>Parsimony (12):</b> −0.6 per BIC point above the true model. A diploma needs 60 of 100.' },
   ];
 
+  const LEARN_CARDS = [
+    { title: 'YOUR MODEL', c: '#2B2F36',
+      body: 'Draw any factor model on the right. <b>Double-click</b> to add a factor and click its items; ' +
+        '<b>Correlate</b> links residuals or factors; <b>+ Item</b> adds an item, <b>Erase</b> removes one.' },
+    { title: 'ITS CORRELATIONS', c: '#B87613',
+      body: 'The left side shows the correlations your model <b>implies</b> in the population, updated as you draw: ' +
+        'scree plot, heatmap and the correlation and partial correlation networks.' },
+    { title: 'CHANGE A VALUE', c: '#2E8B57',
+      body: '<b>Click a path</b>, or the small circle under an item (its residual variance), to set its value with a slider. ' +
+        'Defaults: loadings 1, factor correlations .5, residual variances 1.' },
+    { title: 'NO SCORE', c: '#79808C',
+      body: 'Nothing to win here: just explore. Which models give a scree plot with two big eigenvalues? ' +
+        'What does a cross-loading do to the network?' },
+  ];
+
   let onDone = null;
 
   function show(opts) {
@@ -29,7 +44,7 @@
     const grid = document.getElementById('tut-cards');
     const btn = document.getElementById('tut-continue');
     grid.innerHTML = '';
-    CARDS.forEach((c, k) => {
+    (opts.learn ? LEARN_CARDS : CARDS).forEach((c, k) => {
       const d = document.createElement('div');
       d.className = 'tut-card';
       d.style.setProperty('--c', c.c);
@@ -37,7 +52,8 @@
       d.innerHTML = '<h3>' + c.title + '</h3><p>' + c.body + '</p>';
       grid.appendChild(d);
     });
-    btn.textContent = opts.popup ? 'BACK TO THE GAME' : 'START';
+    btn.textContent = opts.popup ? (opts.learn ? 'BACK' : 'BACK TO THE GAME') : 'START';
+    scr.querySelector('.tut-header').textContent = opts.learn ? 'LEARN: WHAT DOES A MODEL IMPLY?' : 'HOW TO PLAY';
     scr.classList.toggle('popup', !!opts.popup);
     scr.classList.add('show');
     onDone = opts.onDismiss || null;

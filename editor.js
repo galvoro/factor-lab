@@ -24,6 +24,9 @@
   }
   const hyp = Math.hypot;
   const Y_OBS = 0.6;         // items row (leaves room below for residuals)
+  // LEARN-mode parameter values given to new paths / items
+  const DEFAULTS = { load: 1, reg: 0.5, fcov: 0.5, rcov: 0.3, rvar: 1 };
+  const MAX_ITEMS = 15, MIN_ITEMS = 2;
 
   function create(svg, opts) {
     opts = opts || {};
@@ -146,7 +149,7 @@
         if (edgeExists('cov', a, b)) { msg('That covariance already exists.', 'info'); return false; }
       }
       if (!silent) pushHistory();
-      S.edges.push({ id: 'e' + (S.nextEdge++), kind, a, b });
+      S.edges.push(newEdge(kind, a, b));
       if (!silent) { GA('connect'); changed(true); }
       return true;
     }
@@ -176,8 +179,8 @@
       // new factors correlate with existing exogenous factors (lavaan cfa() default)
       const others = S.lat.filter(l => !isEndogenous(l.id)).map(l => l.id);
       S.lat.push({ id, kind: 'lat', x, y });
-      for (const o of others) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'cov', a: o, b: id });
-      for (const it of items || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'load', a: id, b: it });
+      for (const o of others) S.edges.push(newEdge('cov', o, id));
+      for (const it of items || []) S.edges.push(newEdge('load', id, it));
       S.sel.clear();
       GA('place');
       changed(true);
@@ -210,7 +213,7 @@
       if (add.length || del.length) {
         pushHistory();
         S.edges = S.edges.filter(e => !(e.kind === 'load' && e.a === p.fid && del.includes(e.b)));
-        for (const it of add) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'load', a: p.fid, b: it });
+        for (const it of add) S.edges.push(newEdge('load', p.fid, it));
         GA('connect');
         changed(true);
       } else render();
@@ -228,6 +231,10 @@
       render();
     }
 
+    function newEdge(kind, a, b) {
+      const v = kind === 'load' ? DEFAULTS.load : kind === 'reg' ? DEFAULTS.reg : isLat(a) ? DEFAULTS.fcov : DEFAULTS.rcov;
+      return { id: 'e' + (S.nextEdge++), kind, a, b, v };
+    }
     function GA(name) { const a = global.GaltonAudio; if (a && a.SFX && a.SFX[name]) a.SFX[name](); }
 
     // ---------------- spec for the estimator ----------------
@@ -236,7 +243,13 @@
       const obsIdx = {}; S.obs.forEach(o => { obsIdx[o.id] = o.idx; });
       const spec = { p: S.obs.length, m: S.lat.length, loadings: [], regressions: [], factorCovs: [], residCovs: [] };
       const edgeParam = {};
+      const val = { L: [], B: [], P: [], R: [] };
+      const vOf = (e) => (e.v === undefined ? 0 : e.v);
       for (const e of S.edges) {
+        if (e.kind === 'load') val.L.push(vOf(e));
+        else if (e.kind === 'reg') val.B.push(vOf(e));
+        else if (isLat(e.a)) val.P.push(vOf(e));
+        else val.R.push(vOf(e));
         if (e.kind === 'load') { spec.loadings.push([obsIdx[e.b], facIdx[e.a]]); edgeParam[e.id] = { mat: 'L', r: obsIdx[e.b], c: facIdx[e.a] }; }
         else if (e.kind === 'reg') { spec.regressions.push([facIdx[e.b], facIdx[e.a]]); edgeParam[e.id] = { mat: 'B', r: facIdx[e.b], c: facIdx[e.a] }; }
         else if (isLat(e.a)) {
@@ -253,7 +266,10 @@
         f: spec.factorCovs.map(([a, b]) => [Math.min(a, b), Math.max(a, b)].join()).sort(),
         t: spec.residCovs.map(([a, b]) => [Math.min(a, b), Math.max(a, b)].join()).sort(),
       });
-      return { spec, edgeParam, key, factorIds: S.lat.map(l => l.id) };
+      // values aligned with FF.sem.buildParams(spec): L, B, P, residual variances, residual covariances
+      const tdiag = S.obs.slice().sort((a, b) => a.idx - b.idx).map(o => (o.v === undefined ? DEFAULTS.rvar : o.v));
+      const theta = [].concat(val.L, val.B, val.P, tdiag, val.R);
+      return { spec, edgeParam, key, factorIds: S.lat.map(l => l.id), theta };
     }
 
     function setFitResult(result, o) {
@@ -308,6 +324,7 @@
       }, parent);
     }
 
+    function fe0(e) { return (S.fit && S.fit.map[e.id]) || { est: e.v || 0, std: 0 }; }
     function edgeStyle(e) {
       const fe = S.fit && !S.stale ? S.fit.map[e.id] : null;
       if (!fe) return { color: INK, width: 2, std: null };
@@ -410,7 +427,7 @@
       if (st.std !== null && S.showValues && S.fitT >= 1) {
         const fs = Math.max(10, Math.min(13, dims().side * 0.3));
         const lg = el('g', { class: 'd-elabel' }, gLabels);
-        const txt = FF.plots.fmt2(st.std);
+        const txt = FF.plots.fmt2(S.learn && S.labelMode !== 'std' ? fe0(e).est : st.std);
         const w = txt.length * fs * 0.58 + 6;
         el('rect', { x: labelPos[0] - w / 2, y: labelPos[1] - fs * 0.7, width: w, height: fs * 1.4, rx: 3, class: 'd-elabel-bg' }, lg);
         const t = el('text', { x: labelPos[0], y: labelPos[1], 'font-size': fs, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, lg);
@@ -425,7 +442,8 @@
       const d = dims();
       const a = residAnchor(o);
       const fe = S.fit && !S.stale ? S.fit.resid[o.idx] : null;
-      const g = el('g', { class: 'd-resid' + (fe ? ' fitted' : '') }, gEdges);
+      const g = el('g', { class: 'd-resid' + (fe ? ' fitted' : '') + (S.sel.has('v:' + o.id) ? ' sel' : ''), 'data-obs': o.id }, gEdges);
+      if (S.learn) el('circle', { cx: a.c[0], cy: a.c[1], r: a.rr + 4, class: 'd-resid-hit' }, g);
       let color = '#9AA0A8', width = 1.4;
       if (fe) {
         const v = Math.min(1, Math.abs(fe.std));
@@ -440,7 +458,7 @@
       if (fe && S.showValues && S.fitT >= 1) {
         const fs = Math.max(9.5, Math.min(12, d.side * 0.27));
         const t = el('text', { x: a.c[0], y: a.c[1], 'font-size': fs, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-resid-val' }, g);
-        t.textContent = FF.plots.fmt2(fe.std);
+        t.textContent = FF.plots.fmt2(S.learn && S.labelMode !== 'std' ? fe.est : fe.std);
       } else if (!fe) {
         el('circle', { cx: a.c[0], cy: a.c[1], r: Math.max(2.5, a.rr * 0.28), class: 'd-resid-dot' }, g);
       }
@@ -583,6 +601,7 @@
 
       if (tool === 'erase') {
         if (n && n.kind === 'lat') removeIds([n.id]);
+        else if (n && n.kind === 'obs' && S.learn) removeObs(n.id);
         else if (eid) removeIds([eid]);
         drag = null;
         return;
@@ -617,9 +636,16 @@
       } else if (eid) {
         S.sel.clear(); S.sel.add(eid); render();
         drag = null;
+        if (S.learn && opts.onParam) opts.onParam({ type: 'edge', id: eid }, ev);
+      } else if (S.learn && hitResid(x, y, 4)) {
+        const o = hitResid(x, y, 4);
+        S.sel.clear(); S.sel.add('v:' + o.id); render();
+        drag = null;
+        if (opts.onParam) opts.onParam({ type: 'obs', id: o.id }, ev);
       } else {
         drag.kind = 'band';
         if (!drag.shift) { S.sel.clear(); render(); }
+        if (S.learn && opts.onParam) opts.onParam(null);
       }
     }
 
@@ -629,7 +655,7 @@
       if (!drag) {
         // hover feedback
         const n = hitNode(x, y, 4);
-        svg.style.cursor = pick ? (n && n.kind === 'obs' ? 'pointer' : 'default') : n ? (S.tool === 'select' ? 'grab' : (S.tool === 'erase' && n.kind !== 'lat' ? 'not-allowed' : 'crosshair'))
+        svg.style.cursor = pick ? (n && n.kind === 'obs' ? 'pointer' : 'default') : n ? (S.tool === 'select' ? 'grab' : (S.tool === 'erase' && n.kind !== 'lat' && !S.learn ? 'not-allowed' : 'crosshair'))
           : (S.tool === 'factor' ? 'copy' : S.tool === 'erase' ? 'pointer' : 'default');
         if (opts.onHoverNode) opts.onHoverNode(n && n.kind === 'obs' ? n.idx : null, ev);
         return;
@@ -740,16 +766,66 @@
       if (pick) { pick = null; notifyPick(); }
       if (fitAnim) { cancelAnimationFrame(fitAnim); fitAnim = null; }
       for (let i = 0; i < p; i++) {
-        S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: p === 1 ? 0.5 : 0.08 + 0.84 * i / (p - 1), y: Y_OBS });
+        S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: p === 1 ? 0.5 : 0.08 + 0.84 * i / (p - 1), y: Y_OBS, v: DEFAULTS.rvar });
       }
       measure();
       render();
     }
     function deleteSelection() {
-      const ids = [...S.sel].filter(id => id[0] !== 'o');
+      const obsSel = [...S.sel].filter(id => id[0] === 'o');
+      const ids = [...S.sel].filter(id => id[0] !== 'o' && id[0] !== 'v');
+      if (S.learn && obsSel.length && !ids.length) { removeObs(obsSel); return; }
       if (!ids.length) { msg('Items cannot be deleted — select a factor or a path.', 'info'); return; }
       removeIds(ids);
     }
+    // spread the items of the bottom row evenly (after adding / removing one)
+    function respaceItems() {
+      const row = S.obs.slice().sort((a, b) => a.x - b.x);
+      const p = row.length;
+      row.forEach((o, k) => { o.x = p === 1 ? 0.5 : 0.08 + 0.84 * k / (p - 1); });
+    }
+    function addObs() {
+      if (S.obs.length >= MAX_ITEMS) { msg('At most ' + MAX_ITEMS + ' items.', 'info'); return false; }
+      pushHistory();
+      const i = S.obs.length;
+      S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: 0.99, y: Y_OBS, v: DEFAULTS.rvar });
+      respaceItems();
+      GA('place');
+      changed(true);
+      return true;
+    }
+    // remove items (with their paths) and renumber the rest 1..p
+    function removeObs(ids) {
+      ids = [].concat(ids);
+      if (S.obs.length - ids.length < MIN_ITEMS) { msg('Keep at least ' + MIN_ITEMS + ' items.', 'info'); return false; }
+      if (pick) cancelPick();
+      pushHistory();
+      const gone = new Set(ids);
+      S.obs = S.obs.filter(o => !gone.has(o.id));
+      S.edges = S.edges.filter(e => !gone.has(e.a) && !gone.has(e.b));
+      const map = {};
+      S.obs.sort((a, b) => a.idx - b.idx).forEach((o, k) => { map[o.id] = 'o' + k; o.idx = k; });
+      S.obs.forEach(o => { o.id = map[o.id]; });
+      S.edges.forEach(e => { if (map[e.a]) e.a = map[e.a]; if (map[e.b]) e.b = map[e.b]; });
+      S.sel.clear();
+      respaceItems();
+      GA('erase');
+      changed(true);
+      return true;
+    }
+    // LEARN: value of a path ({type:'edge', id}) or residual variance ({type:'obs', id})
+    function getValue(t) {
+      if (!t) return null;
+      if (t.type === 'edge') { const e = S.edges.find(x => x.id === t.id); return e ? { kind: e.kind === 'cov' ? (isLat(e.a) ? 'fcov' : 'rcov') : e.kind, v: e.v, a: e.a, b: e.b } : null; }
+      const o = node(t.id);
+      return o ? { kind: 'rvar', v: o.v, a: o.id } : null;
+    }
+    function setValue(t, v) {
+      if (!t) return;
+      if (t.type === 'edge') { const e = S.edges.find(x => x.id === t.id); if (e) e.v = v; }
+      else { const o = node(t.id); if (o) o.v = v; }
+    }
+    function setLearn(on) { S.learn = !!on; render(); }
     function factorFromSelection() {
       const items = [...S.sel].filter(id => id[0] === 'o');
       if (!items.length) { setTool('factor'); return null; }
@@ -847,10 +923,10 @@
         S.lat.push({ id, kind: 'lat', x: (j + 1) / (spec.m + 1), y: 0.24, label: letters ? letters[j] : undefined });
         ids.push(id);
       }
-      for (const [i, j] of spec.loadings) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'load', a: ids[j], b: 'o' + i });
-      for (const [t, f] of spec.regressions || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'reg', a: ids[f], b: ids[t] });
-      for (const [a, b] of spec.factorCovs || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'cov', a: ids[a], b: ids[b] });
-      for (const [a, b] of spec.residCovs || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'cov', a: 'o' + a, b: 'o' + b });
+      for (const [i, j] of spec.loadings) S.edges.push(newEdge('load', ids[j], 'o' + i));
+      for (const [t, f] of spec.regressions || []) S.edges.push(newEdge('reg', ids[f], ids[t]));
+      for (const [a, b] of spec.factorCovs || []) S.edges.push(newEdge('cov', ids[a], ids[b]));
+      for (const [a, b] of spec.residCovs || []) S.edges.push(newEdge('cov', 'o' + a, 'o' + b));
       tidy(false);
     }
 
@@ -874,6 +950,10 @@
       get counts() { return { factors: S.lat.length, edges: S.edges.length }; },
       get edges() { return S.edges.map(x => Object.assign({}, x)); },
       get picking() { return !!pick; },
+      addObs, removeObs, getValue, setValue, setLearn, DEFAULTS,
+      set labelMode(m) { S.labelMode = m; render(); },
+      get itemCount() { return S.obs.length; },
+      clearSelection() { S.sel.clear(); render(); },
       get pickItems() { return pick ? [...pick.items].map(id => +id.slice(1)) : null; },
       startPick, commitPick, cancelPick, pickAll,
       cancelPending() { pending = null; render(); },

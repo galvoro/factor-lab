@@ -69,7 +69,7 @@
   const acceptTrue = (f) => CRITERIA.every(c => c.tiers[0].test(c.value(f)));
 
   const G = {
-    screen: 'title', phase: 'build', tab: 'data', rview: 'implied',
+    screen: 'title', mode: 'play', phase: 'build', tab: 'data', rview: 'implied',
     level: 1, seedBase: null, gameNo: 0, recent: [], played: [],
     round: 0, rounds: [], cur: null, tutorialSeen: false,
   };
@@ -121,12 +121,14 @@
     },
     onHoverNode: (idx, ev) => highlight(idx === null ? null : [idx], 'canvas', ev),
     onPick: (info) => placePicker(info),
+    onParam: (t, ev) => openParam(t, ev),
     onRender: () => syncSelectionHL(),
   });
   const truthView = FF.editor.create($('truth-canvas'), { static: true });
 
   function onModelChanged() {
     if (!G.cur) return;
+    if (G.mode === 'learn') learnUpdate(true);
     updateModelInfo();
     updateFactorButton();
     $('canvas-hint').classList.toggle('gone', editor.counts.factors > 0 || editor.counts.edges > 0);
@@ -143,6 +145,10 @@
     const npar = FF.sem.buildParams(spec).length;
     const df = spec.p * (spec.p + 1) / 2 - npar;
     const fac = spec.m === 1 ? '1 factor' : spec.m + ' factors';
+    if (G.mode === 'learn') {
+      $('model-info').innerHTML = `${spec.p} items &middot; ${fac} &middot; ${npar} parameters`;
+      return;
+    }
     let s = `${fac} &middot; ${npar} parameters &middot; <span class="${df < 0 ? 'warn' : ''}">df ${df}</span>`;
     if (spec.m === 0 && !spec.residCovs.length) s += ' &middot; <span class="muted">baseline model (no factors)</span>';
     $('model-info').innerHTML = s;
@@ -216,10 +222,15 @@
     const c = G.cur;
     if (!c || !visible(DD.root)) return;
     const d = c.dash;
-    P.scree(DD.svg('scree'), [{ values: d.ev, color: '#20252C', label: 'data' }], { onHover: hover('scree') });
+    const learn = G.mode === 'learn';
+    DD.cap('scree', 'Scree plot', learn ? '· implied' : '');
+    DD.cap('heat', learn ? 'Implied correlations' : 'Correlations');
+    DD.cap('net', learn ? 'Implied correlation network' : 'Correlation network');
+    DD.cap('pcor', learn ? 'Implied partial correlation network' : 'Regularized partial correlation network');
+    P.scree(DD.svg('scree'), [{ values: d.ev, color: '#20252C', label: learn ? 'implied' : 'data' }], { onHover: hover('scree') });
     P.heatmap(DD.svg('heat'), d.R, { maximum: 1, onHover: hover('cor') });
     P.network(DD.svg('net'), d.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
-    P.network(DD.svg('pcor'), d.G, d.layout, { maximum: d.maxG, onHover: hover('gpcor') });
+    P.network(DD.svg('pcor'), d.G, d.layout, { maximum: d.maxG, onHover: hover(learn ? 'pcor' : 'gpcor') });
     applyHighlight(hlSet(), HL.pair);
   }
 
@@ -307,7 +318,7 @@
     if (!h) { hideTip(); highlight(null, 'plot'); return; }
     const m = G.phase === 'results' ? modelDash() : null;
     if (kind === 'scree') {
-      let s = `<div class="tt-h">Eigenvalue ${h.k + 1}</div>` + tipRow('data', c.dash.ev[h.k].toFixed(2));
+      let s = `<div class="tt-h">Eigenvalue ${h.k + 1}</div>` + tipRow(G.mode === 'learn' ? 'implied' : 'data', c.dash.ev[h.k].toFixed(2));
       if (m) s += tipRow('model', m.ev[h.k].toFixed(2));
       showTip(s, ev);
       return;
@@ -317,7 +328,7 @@
     const pick = (o) => (kind === 'gpcor' ? o.G : kind === 'pcor' ? o.P : o.R);
     const D = pick(c.dash);
     const v = D[i][j];
-    let s = `<div class="tt-h">${name} ${i + 1}–${j + 1}</div>` + tipRow('data', f2(v), cls(v));
+    let s = `<div class="tt-h">${name} ${i + 1}–${j + 1}</div>` + tipRow(G.mode === 'learn' ? 'implied' : 'data', f2(v), cls(v));
     if (m) {
       const M = pick(m);
       s += tipRow('model', f2(M[i][j]), cls(M[i][j])) + tipRow('residual', sgn(v - M[i][j]), 'resid');
@@ -397,6 +408,163 @@
   }
 
   // ------------------------------------------------------------------
+  // LEARN mode: draw a model, set its values, see what it implies
+  // ------------------------------------------------------------------
+  const PARAM = {
+    load: { title: 'Factor loading', min: -2, max: 2 },
+    reg: { title: 'Regression between factors', min: -2, max: 2 },
+    fcov: { title: 'Factor correlation', min: -0.95, max: 0.95 },
+    rcov: { title: 'Residual covariance', min: -1.5, max: 1.5 },
+    rvar: { title: 'Residual variance', min: 0.05, max: 3 },
+  };
+  const itemNo = (id) => +id.slice(1) + 1;
+
+  function setMode(mode) {
+    G.mode = mode;
+    const learn = mode === 'learn';
+    document.body.classList.toggle('mode-learn', learn);
+    editor.setLearn(learn);
+    closeParam();
+    $('dash-title').textContent = learn ? 'IMPLIED BY YOUR MODEL' : 'DATA';
+    $('tab-data-label').textContent = learn ? 'Implied' : 'Data';
+    $('canvas-hint').innerHTML = learn
+      ? '<b>Double-click</b> to add a factor, then click its items.<br><b>Click a path</b> or a residual to change its value.'
+      : '<b>Double-click</b> the canvas to add a factor,<br>then click the items it measures.';
+  }
+
+  function startLearn() {
+    showOverlay(null);
+    G.screen = 'game';
+    hideCard(true);
+    closeModal('modal-truth');
+    Object.assign(HL, { sel: [], hover: null, pair: null, key: '' });
+    setMode('learn');
+    setPhase('build');
+    G.cur = { learn: true, p: 6, dash: null };
+    G.learnLayout = null;
+    editor.reset(6);
+    editor.setTool('select');
+    $('canvas-hint').classList.remove('gone');
+    fitBtn.disabled = false;
+    setTab('model');
+    learnUpdate(true);
+    updateModelInfo();
+    updateFactorButton();
+    requestAnimationFrame(renderAll);
+  }
+
+  // recompute the implied correlations from the drawn model and its values
+  function learnUpdate(relayout) {
+    if (G.mode !== 'learn' || !G.cur) return;
+    const { spec, theta } = editor.getSpec();
+    const ev = FF.sem.evaluate(spec, theta);
+    const ok = ev.ok && ev.pd;
+    $('learn-warn').classList.toggle('hidden', ok);
+    DD.root.classList.toggle('impossible', !ok);
+    if (ok) {
+      const R = ev.impliedCor, Pc = la.partialCor(R);
+      if (relayout || !G.learnLayout || G.learnLayout.length !== R.length) G.learnLayout = P.springLayout(R);
+      G.cur.dash = { R, P: Pc, G: Pc, ev: la.eigSym(R).values, layout: G.learnLayout, maxR: 1, maxP: 1, maxG: 1 };
+    } else if (!G.cur.dash || G.cur.dash.R.length !== spec.p) {
+      const I = la.eye(spec.p);
+      G.cur.dash = { R: I, P: la.zeros(spec.p, spec.p), G: la.zeros(spec.p, spec.p), ev: new Array(spec.p).fill(1), layout: P.springLayout(I), maxR: 1, maxP: 1, maxG: 1 };
+    }
+    G.cur.p = spec.p;
+    G.cur.ev = ev;
+    $('dash-note').textContent = `${spec.p} items · population values`;
+    editor.setFitResult(ev.ok ? { est: ev.est } : null);
+    renderData();
+    refreshParam();
+  }
+
+  // ---- value popup ----
+  const paramPop = $('param-pop');
+  let paramT = null;
+  function openParam(t, ev) {
+    if (!t) { closeParam(); return; }
+    const info = editor.getValue(t);
+    if (!info) { closeParam(); return; }
+    paramT = t;
+    const P2 = PARAM[info.kind];
+    $('pr-title').textContent = P2.title;
+    $('pr-sub').textContent = info.kind === 'load' ? `item ${itemNo(info.b)} on its factor`
+      : info.kind === 'rcov' ? `between the residuals of items ${itemNo(info.a)} and ${itemNo(info.b)}`
+      : info.kind === 'rvar' ? `item ${itemNo(info.a)}` : info.kind === 'fcov' ? 'factor variances are fixed to 1' : '';
+    for (const el of [$('pr-range'), $('pr-num')]) { el.min = P2.min; el.max = P2.max; el.step = 0.05; }
+    $('pr-range').value = info.v; $('pr-num').value = info.v.toFixed(2);
+    paramPop.classList.remove('hidden');
+    hideTip();
+    // place next to the click, inside the canvas (docked at the bottom on narrow screens)
+    const wrap = canvasWrap.getBoundingClientRect();
+    const pw = paramPop.offsetWidth, ph = paramPop.offsetHeight;
+    let left, top;
+    if (wrap.width < 520 || !ev || !isFinite(ev.clientX)) { left = (wrap.width - pw) / 2; top = wrap.height - ph - 10; }
+    else {
+      left = ev.clientX - wrap.left + 18; top = ev.clientY - wrap.top - ph / 2;
+      if (left + pw > wrap.width - 8) left = ev.clientX - wrap.left - pw - 18;
+    }
+    paramPop.style.left = Math.max(8, Math.min(wrap.width - pw - 8, left)) + 'px';
+    paramPop.style.top = Math.max(8, Math.min(wrap.height - ph - 8, top)) + 'px';
+    refreshParam();
+  }
+  function closeParam() {
+    paramT = null;
+    paramPop.classList.add('hidden');
+  }
+  function refreshParam() {
+    if (!paramT) return;
+    const info = editor.getValue(paramT);
+    if (!info) { closeParam(); return; }
+    const ev = G.cur && G.cur.ev;
+    let std = null;
+    if (ev && ev.ok) {
+      const { edgeParam } = editor.getSpec();
+      const q = paramT.type === 'edge' ? edgeParam[paramT.id] : { mat: 'T', r: itemNo(paramT.id) - 1, c: itemNo(paramT.id) - 1 };
+      const e = q && ev.est.find(x => x.mat === q.mat && x.r === q.r && x.c === q.c);
+      if (e) std = e.std;
+    }
+    const what = info.kind === 'rvar' ? 'standardized (share of the item\'s variance)' : 'standardized';
+    $('pr-std').innerHTML = std === null ? '' : `${what}: <b>${f2(std)}</b>`;
+  }
+  function applyParam(v, relayout) {
+    if (!paramT) return;
+    const info = editor.getValue(paramT);
+    const P2 = PARAM[info.kind];
+    v = Math.max(P2.min, Math.min(P2.max, Math.round(v * 100) / 100));
+    editor.setValue(paramT, v);
+    learnUpdate(relayout);
+  }
+  let paramRAF = null;
+  $('pr-range').addEventListener('input', () => {
+    $('pr-num').value = (+$('pr-range').value).toFixed(2);
+    if (paramRAF) return;
+    paramRAF = requestAnimationFrame(() => { paramRAF = null; applyParam(+$('pr-range').value, false); });
+  });
+  $('pr-range').addEventListener('change', () => applyParam(+$('pr-range').value, true));
+  $('pr-num').addEventListener('change', () => {
+    const v = parseFloat($('pr-num').value);
+    if (!isFinite(v)) return;
+    applyParam(v, true);
+    const info = editor.getValue(paramT);
+    if (info) { $('pr-range').value = info.v; $('pr-num').value = info.v.toFixed(2); }
+  });
+  $('pr-reset').addEventListener('click', () => {
+    const info = paramT && editor.getValue(paramT);
+    if (!info) return;
+    SFX('click');
+    const d = editor.DEFAULTS[info.kind];
+    $('pr-range').value = d; $('pr-num').value = d.toFixed(2);
+    applyParam(d, true);
+  });
+  $('pr-done').addEventListener('click', () => { SFX('click'); closeParam(); editor.clearSelection(); });
+  document.querySelectorAll('#label-seg button').forEach(b => b.addEventListener('click', () => {
+    SFX('click');
+    document.querySelectorAll('#label-seg button').forEach(x => x.classList.toggle('on', x === b));
+    editor.labelMode = b.dataset.labels;
+  }));
+  $('btn-add-item').addEventListener('click', () => { SFX('click'); editor.addObs(); });
+
+  // ------------------------------------------------------------------
   // HUD
   // ------------------------------------------------------------------
   function updateHUD() {
@@ -438,6 +606,7 @@
   }
 
   function startGame() {
+    if (G.mode !== 'play') setMode('play');
     if (G.seedBase === null) {
       const urlSeed = seedFromURL();
       G.seedBase = urlSeed !== null ? urlSeed : (Math.floor(Math.random() * 4294967295) >>> 0);
@@ -1021,10 +1190,18 @@
     } else startGame();
   }));
   $('level-back').addEventListener('click', () => { SFX('click'); showOverlay('screen-title'); G.screen = 'title'; });
-  $('btn-help').addEventListener('click', () => { SFX('click'); FF.tutorial.show({ popup: true }); });
+  $('btn-help').addEventListener('click', () => { SFX('click'); FF.tutorial.show({ popup: true, learn: G.mode === 'learn' }); });
   $('btn-home').addEventListener('click', () => {
     SFX('click');
-    if (G.screen === 'game') $('modal-quit').classList.add('show');
+    if (G.screen !== 'game') return;
+    if (G.mode === 'learn') { closeParam(); G.screen = 'title'; showOverlay('screen-title'); return; }
+    $('modal-quit').classList.add('show');
+  });
+  $('btn-learn').addEventListener('click', () => {
+    SFX('click');
+    global.GaltonAudio && global.GaltonAudio.ensure();
+    if (!G.learnSeen) FF.tutorial.show({ learn: true, onDismiss: () => { G.learnSeen = true; startLearn(); } });
+    else startLearn();
   });
   $('quit-stay').addEventListener('click', () => closeModal('modal-quit'));
   $('quit-leave').addEventListener('click', () => {
@@ -1125,6 +1302,11 @@
     if (layer.classList.contains('show')) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); skipSeq(); } return; }
     if (G.phase !== 'build') return;
     const k = e.key.toLowerCase();
+    if (G.mode === 'learn') {
+      if (k === 'escape' && paramT) { closeParam(); editor.clearSelection(); return; }
+      if (k === 'enter') return;
+      if (k === 'i' && !e.metaKey && !e.ctrlKey) { editor.addObs(); return; }
+    }
     if (editor.picking) {
       if (k === 'enter') { e.preventDefault(); editor.commitPick(); }
       else if (k === 'escape') editor.cancelPick();

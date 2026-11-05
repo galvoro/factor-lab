@@ -258,6 +258,36 @@
     return { ok: true, df, npar: params.length, reasons };
   }
 
+  // ---- standardized solution (lavaan std.all) ----
+  function standardized(params, theta, mats, imp) {
+    const Sigma = imp.Sigma;
+    const sdObs = Sigma.map((r, i) => Math.sqrt(Math.max(r[i], 0)));
+    const sdLat = imp.M.map((r, i) => Math.sqrt(Math.max(r[i], 0)));
+    return params.map((q, k) => {
+      const v = theta[k];
+      let std;
+      if (q.mat === 'L') std = v * sdLat[q.c] / sdObs[q.r];
+      else if (q.mat === 'B') std = v * sdLat[q.c] / sdLat[q.r];
+      else if (q.mat === 'P') std = v / Math.sqrt(Math.abs(mats.P[q.r][q.r] * mats.P[q.c][q.c]));
+      else if (q.r === q.c) std = v / Sigma[q.r][q.r];
+      else std = v / Math.sqrt(Math.abs(mats.T[q.r][q.r] * mats.T[q.c][q.c]));
+      return { mat: q.mat, r: q.r, c: q.c, est: v, std: isFinite(std) ? std : 0 };
+    });
+  }
+
+  // Implied structure of a model with given parameter values (LEARN mode).
+  // theta follows buildParams(spec). pd: Sigma (and the factor covariance
+  // matrix) positive definite.
+  function evaluate(spec, theta) {
+    const params = buildParams(spec);
+    const mats = matricesFrom(spec, params, theta);
+    const imp = implied(spec, mats);
+    if (!imp) return { ok: false, pd: false, params };
+    const pd = !!la.chol(imp.Sigma) && (spec.m === 0 || !!la.chol(imp.M));
+    return { ok: true, pd, params, mats, Sigma: imp.Sigma, latentCov: imp.M,
+      impliedCor: pd ? la.cov2cor(imp.Sigma) : null, est: standardized(params, theta, mats, imp) };
+  }
+
   // ------------------------------------------------------------------
   // Fit
   // ------------------------------------------------------------------
@@ -334,20 +364,7 @@
     const bic = -2 * logl + npar * Math.log(N);
     const aic = -2 * logl + 2 * npar;
 
-    // ---- standardized solution (lavaan std.all) ----
-    const sdObs = Sigma.map((r, i) => Math.sqrt(r[i]));
-    const varLat = imp.M.map((r, i) => r[i]);
-    const sdLat = varLat.map(v => Math.sqrt(Math.max(v, 0)));
-    const est = params.map((q, k) => {
-      const v = theta[k];
-      let std;
-      if (q.mat === 'L') std = v * sdLat[q.c] / sdObs[q.r];
-      else if (q.mat === 'B') std = v * sdLat[q.c] / sdLat[q.r];
-      else if (q.mat === 'P') std = v / Math.sqrt(Math.abs(mats.P[q.r][q.r] * mats.P[q.c][q.c]));
-      else if (q.r === q.c) std = v / Sigma[q.r][q.r];
-      else std = v / Math.sqrt(Math.abs(mats.T[q.r][q.r] * mats.T[q.c][q.c]));
-      return { mat: q.mat, r: q.r, c: q.c, est: v, std };
-    });
+    const est = standardized(params, theta, mats, imp);
 
     // ---- admissibility ----
     const problems = [];
@@ -444,5 +461,5 @@
     ].join('\n');
   }
 
-  FF.sem = { buildParams, fit, checkIdentification, implied, matricesFrom, lavaanSyntax, rCode };
+  FF.sem = { evaluate, standardized, buildParams, fit, checkIdentification, implied, matricesFrom, lavaanSyntax, rCode };
 })(typeof window !== 'undefined' ? window : globalThis);
