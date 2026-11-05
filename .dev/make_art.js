@@ -3,9 +3,10 @@
 // in the liquid, linked by a qgraph-style correlation network; two latent
 // factors rise as bubbles with loading arrows down into their items.
 //
-//   node .dev/make_art.js            -> writes the art into index.html (between
-//                                       <!--ART--> markers) and .dev/out/cover.html
-//   node .dev/render_cover.js        -> renders cover.png (1254 x 1254) from it
+// (Superseded by the generated images in assets/ and cover.png; kept as a
+// vector alternative.)
+//   node .dev/make_art.js            -> writes .dev/out/cover.html
+//   node .dev/render_cover.js        -> renders it to .dev/out/cover-vector.png
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
@@ -126,16 +127,9 @@ function build(opts) {
 }
 
 const svg = build({ id: 'fl' });
-// title screen: inline the art in index.html
-const idx = path.join(root, 'index.html');
-let html = fs.readFileSync(idx, 'utf8');
-const a = html.indexOf('<!--ART-->'), b = html.indexOf('<!--/ART-->');
-if (a < 0 || b < 0) throw new Error('index.html has no <!--ART--> markers');
-html = html.slice(0, a + '<!--ART-->'.length) + '\n' + svg + '\n' + html.slice(b);
-fs.writeFileSync(idx, html);
 // cover page for rendering
 fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, 'out', 'cover.html'), `<!DOCTYPE html><html><head><meta charset="utf-8">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@500;600&display=block" rel="stylesheet">
 <style>html,body{margin:0;background:#0A0D12} svg{display:block;width:1254px;height:1254px}</style></head><body>${build({ id: 'cv' })}</body></html>`);
-console.log('art written: index.html and .dev/out/cover.html');
+console.log('art written: .dev/out/cover.html');

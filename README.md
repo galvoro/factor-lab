@@ -43,12 +43,17 @@ subtle F1, F2 labels matching the console. Light / dark / auto theme (HUD button
 remembered in localStorage); plots, the canvas and the true-model diagram stay
 on white in every theme (`.panel, .canvas-wrap, .truth-fig` reset the tokens).
 
-## Key art
+## Media
 
-`node .dev/make_art.js && node .dev/render_cover.js` regenerates the flask
-illustration (vector, drawn by the script) inline on the title screen and
-renders `cover.png` (1254 x 1254, the Galvoro square cover; a copy goes to
-`~/GitHub_galvoro/squareimg/` for the upload script).
+* `assets/title-wide.webp` (desktop / landscape) and `assets/title-mobile.webp`
+  (phones, portrait): title-screen key art, generated with ChatGPT Image from the
+  prompts in `.dev/media_prompts.txt` (originals in `.dev/media/`).
+* `cover.png` (1254 x 1254): Galvoro square cover (copy in
+  `~/GitHub_galvoro/squareimg/` for the upload script).
+* `assets/bgm.mp3` ("Quiet Calibration", Gemini): background loop, played quietly
+  by `audio.js` after the first click; the ♪ button mutes it.
+* `.dev/make_art.js` + `.dev/render_cover.js`: the earlier vector version of the
+  key art, kept as an alternative.
 
 ## Datasets
 
