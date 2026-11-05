@@ -14,8 +14,8 @@
         '<b>Correlate</b> links two residuals (circles under the items) or two factors. ' +
         '<b>Erase</b> removes paths. Double-click a factor to change its items.' },
     { title: 'ONE FIT', c: '#2E8B57',
-      body: 'You get <b>one FIT</b>. If the model cannot be estimated, fix it and try again for free. ' +
-        'Then compare the model with the data.' },
+      body: 'Five datasets per game, <b>one FIT</b> each. If the model cannot be estimated, fix it and try again for free. ' +
+        'Then compare the model with the data. A diploma awaits at the end.' },
     { title: 'SCORING', c: '#79808C',
       body: '<b>Fit (40):</b> χ² test, RMSEA, CFI and SRMR give 10 points each if good, 5 if acceptable. ' +
         '<b>Parsimony (60):</b> −3 per BIC point above the true model.' },

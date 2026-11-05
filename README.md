@@ -1,11 +1,14 @@
 # FACTOR FIND (working title)
 
-PLAY/LEARN Galvoro capsule for PL5225 Structural Equation Modeling. Each game,
-N = 150–500 observations are simulated from a hidden factor model (4–9 items,
-1–3 factors, possible cross-loadings, residual correlations, negative or zero
-factor correlations). The player reads the correlational structure on the left
-(scree plot, heatmap, correlation network, partial-correlation network), draws a
-path diagram on the right and presses FIT once.
+PLAY/LEARN Galvoro capsule for PL5225 Structural Equation Modeling. A game is
+five datasets at one level (Easy / Medium / Hard / Psychometrika), each
+simulated from a hidden factor model: from no factors at all up to 15 items,
+5 factors, cross-loadings, residual correlations, negative or zero factor
+correlations. The player reads the correlational structure on the left (scree
+plot, heatmap, correlation network, regularized partial correlation network),
+draws a path diagram on the right and presses FIT once per dataset. The game
+ends with a diploma: medal by level (bronze / silver / gold / platinum), stars
+by score.
 
 LEARN mode is not built yet (button shows "coming soon").
 
@@ -16,7 +19,7 @@ LEARN mode is not built yet (button shows "coming soon").
 | `linalg.js` | small matrix helpers, Jacobi eigen, chi-square tail, seeded RNG |
 | `glasso.js` | graphical lasso + EBIC model selection (as `qgraph::EBICglasso`, gamma 0.5), written from the published algorithm; used for the regularized partial correlation networks (data and model-implied) |
 | `sem.js` | ML estimation (Fisher scoring, std.lv identification), fit indices, identification check, lavaan export |
-| `bank.js` | 48 structure templates (levels 1–3), random parameter draws (`RANGES`), data simulation, plain-language description and structure comparison |
+| `bank.js` | 61 structure templates (levels 1–4, incl. the no-factor baseline in Easy), random parameter draws (`RANGES`), data simulation, plain-language description and structure comparison |
 | `plots.js` | qgraph-style scree / heatmap / networks; `springLayout` is a port of qgraph's Fruchterman–Reingold |
 | `editor.js` | SVG path-diagram editor: double-click adds a factor and opens the indicator picker (double-click a factor to edit its items); residual correlations are drawn between the items' hidden residuals |
 | `game.js` | game flow, dashboards, fit card, scoring (`CONFIG` / `CRITERIA` at the top), true-model reveal |
@@ -43,12 +46,15 @@ So the true structure always scores 100, and nothing in it is undetectable.
 * Fit (40): χ² p ≥ .05 / ≥ .01, RMSEA < .05 / < .08, CFI ≥ .95 / ≥ .90,
   SRMR < .08 / < .10 → 10 / 5 points each. df = 0 → no fit points.
 * Parsimony (60): 60 − 3 × max(0, BIC(player) − BIC(true structure)).
-* `CONFIG.ROUNDS` = 1 (single-dataset games with a session average). Set it
-  to e.g. 5 for multi-round games with a final screen.
+* `CONFIG.ROUNDS` = 5 datasets per game, then the diploma (stars at 60 / 80 /
+  95% of the maximum). `CONFIG.LEVELS` sets each level's medal and the sample
+  sizes drawn (Psychometrika: N = 300–1000).
+* An empty canvas fits the baseline (independence) model after a confirming
+  second press of FIT.
 
 ## Verification (`.dev/`, never published)
 
-* `node .dev/validate_bank.js 20 150 500` — every template identified and
+* `node .dev/validate_bank.js 20 150 500` (Psychometrika: `... 300 1000`) — every template identified and
   generated within the try budget; draws needed and generation time.
 * `node .dev/verify_lavaan.js 3 && Rscript .dev/verify_lavaan.R` — random
   player models vs lavaan (last run: 126 models, χ² within .0013, BIC within
@@ -58,7 +64,8 @@ So the true structure always scores 100, and nothing in it is undetectable.
   vs `qgraph::EBICglasso` (last run: 192 datasets, networks within .0013,
   one tiny edge differing in one case; model-implied matrices within .0001).
 * `node .dev/verify_rcode.js` — the in-game "Check in R" code reproduces the fit.
-* `node .dev/smoke_full_game.js [baseURL]` — plays three games in headless
-  Chrome (serve the folder on port 8765 first, or pass a URL).
+* `node .dev/smoke_full_game.js [baseURL]` — plays a five-round Easy game in
+  headless Chrome up to the diploma (serve the folder on port 8765 first, or
+  pass a URL).
 
 `index.html?seed=123` gives a reproducible sequence of datasets.

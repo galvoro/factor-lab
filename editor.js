@@ -51,7 +51,7 @@
     // ---------------- geometry ----------------
     function dims() {
       const p = Math.max(S.obs.length, 1);
-      const side = Math.max(26, Math.min(48, W / (p + 2.2), H / 7.5));
+      const side = Math.max(16, Math.min(48, W / (p + 2.2), H / 7.5));
       // rr: radius of the (invisible) residual node; stub: arrow length into the item
       return { side, half: side / 2, R: side * 0.66, rr: Math.max(9, side * 0.3), stub: side * 0.42 };
     }

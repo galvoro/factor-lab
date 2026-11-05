@@ -16,7 +16,10 @@
 //   neg   : [a, b]                negatively correlated factor pairs
 //   orth  : [a, b]                uncorrelated factor pairs
 //
-// level 1 = clean structure, 2 = one twist, 3 = several twists.
+// level 1 = clean structure (incl. no factors at all), 2 = one twist,
+// 3 = several twists, 4 = "Psychometrika": 10-15 items, 3-5 factors and
+// several twists at once.
+//   p     : [min, max] number of items for the no-factor template
 (function (global) {
   'use strict';
   const FF = global.FF = global.FF || {};
@@ -35,6 +38,7 @@
 
   const TEMPLATES = [
     // ---------------- level 1: clean structure ----------------
+    T('E00', 1, 'Nothing to find', [], { p: [5, 8] }),
     T('E01', 1, 'One factor, four items', [4]),
     T('E02', 1, 'One factor, five items', [5]),
     T('E03', 1, 'One factor, six items', [6]),
@@ -87,13 +91,27 @@
     T('H14', 3, 'Seven items, three factors and a bridge', [3, 2, 2], { resid: [[0, 5]] }),
     T('H15', 3, 'Odd one out', [3, 3, 3], { orth: [[0, 2], [1, 2]] }),
     T('H16', 3, 'Final boss', [3, 3, 3], { cross: [[3, 0, 1]], neg: [[0, 2]], resid: [[7, 8]] }),
+
+    // ---------------- level 4: Psychometrika ----------------
+    T('P01', 4, 'Four by three', [3, 3, 3, 3], { cross: [[2, 1, 1]], resid: [[6, 7]] }),
+    T('P02', 4, 'Three by four', [4, 4, 4], { cross: [[3, 1, 1], [7, 2, 1]], resid: [[0, 1]] }),
+    T('P03', 4, 'Four factors, two opposed', [4, 3, 3, 3], { neg: [[0, 3]], resid: [[1, 2], [8, 9]] }),
+    T('P04', 4, 'Five by three', [3, 3, 3, 3, 3], { cross: [[5, 2, 1]], resid: [[9, 12]] }),
+    T('P05', 4, 'Reversed and cross-loaded', [5, 4, 4], { rev: [4], cross: [[3, 1, 1], [8, 2, -1]], resid: [[10, 11]] }),
+    T('P06', 4, 'An outsider factor', [3, 3, 3, 3], { orth: [[0, 3], [1, 3], [2, 3]], cross: [[1, 1, 1]], resid: [[4, 5]] }),
+    T('P07', 4, 'Method pairs', [4, 4, 3], { resid: [[0, 1], [4, 5], [8, 9]], cross: [[3, 1, -1]] }),
+    T('P08', 4, 'Short scale in a big model', [4, 3, 3, 2], { cross: [[6, 2, 1]], neg: [[1, 3]], resid: [[0, 7]] }),
+    T('P09', 4, 'Five factors, fourteen items', [3, 3, 3, 3, 2], { cross: [[2, 1, 1]], resid: [[5, 8]] }),
+    T('P10', 4, 'Three cross-loaders', [5, 5, 5], { cross: [[4, 1, 1], [9, 2, 1], [14, 0, 1]] }),
+    T('P11', 4, 'Negative wording, four factors', [3, 3, 3, 3], { rev: [2, 5], resid: [[2, 5]], neg: [[0, 2]] }),
+    T('P12', 4, 'Two big factors', [6, 6], { rev: [5, 11], resid: [[0, 1], [6, 7], [5, 11]] }),
   ];
 
   const hasPair = (list, a, b) => list.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
-  function dims(model) { return { p: model.L.length, m: model.L[0].length }; }
+  function dims(model) { return { p: model.L.length, m: model.L.length ? model.L[0].length : 0 }; }
 
   function phiMatrix(model) {
-    const m = model.L[0].length;
+    const m = dims(model).m;
     const Phi = la.eye(m);
     for (const [a, b, r] of model.phi || []) { Phi[a][b] = r; Phi[b][a] = r; }
     return Phi;
@@ -101,7 +119,8 @@
 
   // Population covariance (= correlation) matrix of a model.
   function populationSigma(model) {
-    const { p } = dims(model);
+    const { p, m } = dims(model);
+    if (m === 0) return la.eye(p);                    // no factors: independent items
     const Sig = la.mul(la.mul(model.L, phiMatrix(model)), la.transpose(model.L));
     for (let i = 0; i < p; i++) Sig[i][i] = 1;
     for (const [i, j, c] of model.resid || []) { Sig[i][j] += c; Sig[j][i] += c; }
@@ -110,8 +129,13 @@
 
   // Draw parameter values for a template.
   function drawModel(t, rnd) {
-    const p = t.sizes.reduce((s, v) => s + v, 0), m = t.sizes.length;
     const U = (r) => r[0] + (r[1] - r[0]) * rnd();
+    if (!t.sizes.length) {                             // the baseline (no-factor) model
+      const p = t.p[0] + rnd.int(t.p[1] - t.p[0] + 1);
+      return { template: t, id: t.id, level: t.level, name: t.name, L: [...Array(p)].map(() => []), phi: [], resid: [],
+        primary: new Array(p).fill(-1), theta: new Array(p).fill(1) };
+    }
+    const p = t.sizes.reduce((s, v) => s + v, 0), m = t.sizes.length;
     for (let attempt = 0; attempt < 500; attempt++) {
       const L = la.zeros(p, m);
       const primary = [];
@@ -303,6 +327,7 @@
     neg: '<b>Negatively correlated factors</b> give a block of negative correlations.',
     orth: '<b>Uncorrelated factors</b> give separate blocks; a factor correlation is an unneeded parameter.',
     short: 'A <b>two-item factor</b> is identified only through its correlations with other factors.',
+    none: 'The <b>baseline model</b>: no factors, so the items are independent. The best answer was to fit the model without any factors.',
   };
 
   const f2 = (v) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace(/^0/, '');
@@ -316,6 +341,7 @@
     const num = (i) => pos[i] + 1;
     const lines = [];
     const groups = [];
+    if (m === 0) return { name: t.name, level: t.level, lines: ['No factors: all ' + p + ' items are uncorrelated, apart from sampling noise'], notes: [NOTES.none] };
     for (let f = 0; f < m; f++) {
       const its = [];
       for (let i = 0; i < p; i++) if (model.primary[i] === f) its.push(i);

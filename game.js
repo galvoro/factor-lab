@@ -46,17 +46,17 @@
   ];
 
   const CONFIG = {
-    ROUNDS: 1,                                // datasets per game (1 = single-shot games)
-    N_CHOICES: [150, 200, 250, 300, 400, 500],
+    ROUNDS: 5,                                // datasets per game, then the diploma
     BIC_MAX: 60,                              // parsimony points ...
     BIC_COST: 3,                              // ... minus this per BIC point above the true model
     SUPPORT_BIC: 2,                           // every feature of the truth must be worth >= 2 BIC
     RESID_MAX: 0.25,                          // colour scale for residual correlations
     RESID_MAX_P: 0.35,                        // ... and residual partial correlations
-    LEVELS: {
-      1: { name: 'Easy', blurb: 'Clean structure: one or two factors.' },
-      2: { name: 'Medium', blurb: 'One twist: a cross-loading, a residual correlation, uncorrelated factors or a third factor.' },
-      3: { name: 'Hard', blurb: 'Several twists and up to three factors.' },
+    LEVELS: {                                 // name, medal on the diploma, sample sizes drawn per round
+      1: { name: 'Easy', medal: 'bronze', N: [150, 200, 250, 300, 400, 500] },
+      2: { name: 'Medium', medal: 'silver', N: [150, 200, 250, 300, 400, 500] },
+      3: { name: 'Hard', medal: 'gold', N: [150, 200, 250, 300, 400, 500] },
+      4: { name: 'Psychometrika', medal: 'platinum', N: [300, 400, 500, 750, 1000] },
     },
     CRITERIA,
   };
@@ -141,7 +141,7 @@
     const df = spec.p * (spec.p + 1) / 2 - npar;
     const fac = spec.m === 1 ? '1 factor' : spec.m + ' factors';
     let s = `${fac} &middot; ${npar} parameters &middot; <span class="${df < 0 ? 'warn' : ''}">df ${df}</span>`;
-    if (spec.m === 0 && !spec.residCovs.length) s += ' &middot; <span class="muted">no model yet</span>';
+    if (spec.m === 0 && !spec.residCovs.length) s += ' &middot; <span class="muted">baseline model (no factors)</span>';
     $('model-info').innerHTML = s;
   }
 
@@ -416,7 +416,7 @@
     document.body.classList.toggle('phase-results', ph === 'results');
     const label = fitBtn.querySelector('.fit-label');
     if (ph === 'build') label.textContent = 'FIT';
-    else label.textContent = CONFIG.ROUNDS > 1 ? (G.round + 1 >= CONFIG.ROUNDS ? 'FINISH' : 'NEXT ▸') : 'NEW DATA ▸';
+    else label.textContent = CONFIG.ROUNDS > 1 ? (G.round + 1 >= CONFIG.ROUNDS ? 'DIPLOMA ▸' : 'NEXT ▸') : 'NEW DATA ▸';
     fitBtn.classList.toggle('next', ph === 'results');
     $('tab-model-label').textContent = ph === 'results' ? 'Your model' : 'Model';
     setReadout(defaultReadout());
@@ -455,7 +455,8 @@
     if (!pool.length) pool = FF.bank.TEMPLATES.filter(t => t.level === G.level);
     const tpl = pool[rnd.int(pool.length)];
     G.recent = G.recent.concat(tpl.id).slice(-5);
-    const N = CONFIG.N_CHOICES[rnd.int(CONFIG.N_CHOICES.length)];
+    const Ns = CONFIG.LEVELS[G.level].N;
+    const N = Ns[rnd.int(Ns.length)];
 
     hideCard(true);
     closeModal('modal-truth');
@@ -514,7 +515,7 @@
     return { rows, saturated, fitPts, dBIC, bicPts, bicCls, total: fitPts + bicPts, cmp };
   }
 
-  let busy = false;
+  let busy = false, emptyArmed = 0;
   function onFitButton() {
     if (busy || generating || !G.cur) return;
     if (G.phase === 'results') { afterRound(); return; }
@@ -523,10 +524,14 @@
     if (editor.picking) editor.commitPick();
     const { spec, key } = editor.getSpec();
     if (spec.m === 0 && !spec.residCovs.length) {
-      SFX('error');
-      toast('Draw a model first: double-click the canvas to add a factor.', 'warn');
-      return;
+      // fitting the baseline model is allowed, but ask once to avoid accidents
+      if (performance.now() - emptyArmed > 3500) {
+        emptyArmed = performance.now();
+        toast('Fit the baseline model, with no factors at all? Press FIT again to confirm.');
+        return;
+      }
     }
+    emptyArmed = 0;
     editor.cancelPending();
     busy = true;
     fitBtn.classList.add('busy');
@@ -691,8 +696,8 @@
     sc.rows.forEach(row => { row.g = gaugeGeom(row.cr.axis, row.v); });
     hideTip();
     const nextLevelSeg = CONFIG.ROUNDS > 1 ? '' :
-      `<div class="next-level"><span>Next:</span><div class="seg small" id="next-seg">${[1, 2, 3].map(l => `<button data-level="${l}" class="${l === G.level ? 'on' : ''}">${CONFIG.LEVELS[l].name}</button>`).join('')}</div></div>`;
-    const nextLabel = CONFIG.ROUNDS > 1 ? (G.round + 1 >= CONFIG.ROUNDS ? 'Final score' : 'Next round ▸') : 'New dataset ▸';
+      `<div class="next-level"><span>Next:</span><div class="seg small" id="next-seg">${[1, 2, 3, 4].map(l => `<button data-level="${l}" class="${l === G.level ? 'on' : ''}">${CONFIG.LEVELS[l].name}</button>`).join('')}</div></div>`;
+    const nextLabel = CONFIG.ROUNDS > 1 ? (G.round + 1 >= CONFIG.ROUNDS ? 'See your diploma ▸' : 'Next round ▸') : 'New dataset ▸';
     const sign = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1);
     card.className = 'card';
     card.innerHTML = `
@@ -882,19 +887,60 @@
   }
 
   // ------------------------------------------------------------------
-  // Final screen (multi-round games only)
+  // Medals and the diploma (end of a multi-round game)
   // ------------------------------------------------------------------
+  const METALS = {
+    bronze: { name: 'Bronze', hi: '#F6D2AE', mid: '#C27C3E', lo: '#76461C' },
+    silver: { name: 'Silver', hi: '#FFFFFF', mid: '#BCC3CB', lo: '#6B7480' },
+    gold: { name: 'Gold', hi: '#FFF2B0', mid: '#D9A520', lo: '#85600A' },
+    platinum: { name: 'Platinum', hi: '#FFFFFF', mid: '#A7CAD8', lo: '#4A7080' },
+  };
+  let medalSeq = 0;
+  function starPoints(cx, cy, ro, ri, n) {
+    const pts = [];
+    for (let k = 0; k < 2 * n; k++) {
+      const a = Math.PI * k / n - Math.PI / 2, r = k % 2 ? ri : ro;
+      pts.push((cx + r * Math.cos(a)).toFixed(2) + ',' + (cy + r * Math.sin(a)).toFixed(2));
+    }
+    return pts.join(' ');
+  }
+  function medalSVG(metal, size, ribbons) {
+    const m = METALS[metal], id = 'medal-g' + (++medalSeq);
+    const rib = ribbons ? `<polygon points="30,62 18,98 30,90 38,100 46,66" fill="${m.lo}"/><polygon points="70,62 82,98 70,90 62,100 54,66" fill="${m.mid}"/>` : '';
+    return `<svg class="medal ${metal}" viewBox="0 0 100 ${ribbons ? 102 : 100}" width="${size}" height="${ribbons ? size * 1.02 : size}" role="img" aria-label="${m.name} medal">
+      <defs><radialGradient id="${id}" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="${m.hi}"/><stop offset="0.55" stop-color="${m.mid}"/><stop offset="1" stop-color="${m.lo}"/></radialGradient></defs>
+      ${rib}
+      <polygon points="${starPoints(50, 46, 44, 38, 24)}" fill="url(#${id})" stroke="${m.lo}" stroke-width="1.4"/>
+      <circle cx="50" cy="46" r="30" fill="none" stroke="${m.hi}" stroke-width="2.2" opacity="0.85"/>
+      <circle cx="50" cy="46" r="27" fill="url(#${id})" stroke="${m.lo}" stroke-width="1"/>
+      <polygon points="${starPoints(50, 47, 19, 8, 5)}" fill="${m.hi}" stroke="${m.lo}" stroke-width="1.2"/>
+    </svg>`;
+  }
+  const smallStar = (on) => `<svg viewBox="0 0 24 24" class="${on ? 'on' : ''}"><polygon points="${starPoints(12, 12.5, 11, 4.6, 5)}"/></svg>`;
+
   function showFinal() {
+    const lv = CONFIG.LEVELS[G.level];
     const max = CONFIG.ROUNDS * MAX_ROUND;
     const total = G.rounds.reduce((s, r) => s + r.total, 0);
-    $('final-score').innerHTML = `${total}<small> / ${max}</small>`;
+    const frac = total / max;
+    const nStars = frac >= 0.95 ? 3 : frac >= 0.8 ? 2 : frac >= 0.6 ? 1 : 0;
+    $('dip-level').textContent = lv.name;
+    $('final-score').innerHTML = `<span id="dip-num">0</span><small> / ${max}</small>`;
+    $('dip-stars').innerHTML = [0, 1, 2].map(k => smallStar(k < nStars)).join('');
     $('final-rank').textContent = rankFor(total / CONFIG.ROUNDS, false);
-    const rows = G.rounds.map((r, k) => `<tr><td>${k + 1}</td><td>${r.tpl.name}</td><td>${r.N}</td><td>${r.fitPts}</td><td>${r.bicPts}</td><td>${r.total}</td></tr>`).join('');
-    $('final-table').innerHTML = `<tr><th>#</th><th>TRUE MODEL</th><th>N</th><th>FIT</th><th>PARSIMONY</th><th>POINTS</th></tr>${rows}<tr class="sum"><td></td><td>Total</td><td></td><td></td><td></td><td>${total}</td></tr>`;
+    $('dip-seal').innerHTML = medalSVG(lv.medal, 118, true) + `<div class="seal-label">${METALS[lv.medal].name.toUpperCase()}</div>`;
+    const rows = G.rounds.map((r, k) => `<tr><td>${k + 1}</td><td>${r.tpl.name}${r.exact ? ' <span class="dip-exact" title="exact structure">✓</span>' : ''}</td><td>${r.N}</td><td>${r.fitPts}</td><td>${r.bicPts}</td><td>${r.total}</td></tr>`).join('');
+    $('final-table').innerHTML = `<tr><th>#</th><th>True model</th><th>N</th><th>Fit</th><th>Parsimony</th><th>Points</th></tr>${rows}`;
+    $('dip-date').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     hideCard(true);
+    closeModal('modal-truth');
     showOverlay('screen-final');
     G.screen = 'final';
-    SFX('close');
+    const d = $('diploma');
+    d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
+    seq.fast = false;
+    setTimeout(() => countUp($('dip-num'), 0, total, 1100), 450);
+    setTimeout(() => SFX(nStars >= 2 ? 'levelup' : 'close'), 500);
   }
 
   // ------------------------------------------------------------------
@@ -923,7 +969,10 @@
   // ------------------------------------------------------------------
   // Wiring
   // ------------------------------------------------------------------
-  document.querySelectorAll('.lc-blurb').forEach(el => { el.textContent = CONFIG.LEVELS[+el.dataset.blurb].blurb; });
+  document.querySelectorAll('.lc-medal').forEach(el => {
+    const metal = CONFIG.LEVELS[+el.dataset.medal].medal;
+    el.innerHTML = medalSVG(metal, 30) + `<span>${METALS[metal].name}</span>`;
+  });
   $('btn-play').addEventListener('click', () => {
     SFX('click');
     global.GaltonAudio && global.GaltonAudio.ensure();
@@ -953,6 +1002,7 @@
   });
   $('btn-again').addEventListener('click', () => { SFX('click'); startGame(); });
   $('btn-final-home').addEventListener('click', () => { SFX('click'); G.screen = 'title'; showOverlay('screen-title'); });
+  $('btn-other-level').addEventListener('click', () => { SFX('click'); syncLevelSeg(); showOverlay('screen-level'); G.screen = 'level'; });
   $('r-close').addEventListener('click', () => closeModal('modal-r'));
   $('truth-close').addEventListener('click', () => { SFX('click'); closeModal('modal-truth'); });
   for (const id of ['modal-r', 'modal-truth']) $(id).addEventListener('click', (e) => { if (e.target.id === id) closeModal(id); });
