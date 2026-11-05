@@ -461,9 +461,15 @@
     const ok = ev.ok && ev.pd;
     $('learn-warn').classList.toggle('hidden', ok);
     DD.root.classList.toggle('impossible', !ok);
+    let target = null;
     if (ok) {
       const R = ev.impliedCor, Pc = la.partialCor(R);
-      if (relayout || !G.learnLayout || G.learnLayout.length !== R.length) G.learnLayout = P.springLayout(R);
+      const same = G.learnLayout && G.learnLayout.length === R.length;
+      if (relayout || !same) {
+        // new qgraph layout, turned / mirrored to sit as close as possible to the old one
+        target = alignLayout(P.springLayout(R), G.learnLayout);
+        if (!same) { G.learnLayout = target; target = null; }
+      }
       G.cur.dash = { R, P: Pc, G: Pc, ev: la.eigSym(R).values, layout: G.learnLayout, maxR: 1, maxP: 1, maxG: 1 };
     } else if (!G.cur.dash || G.cur.dash.R.length !== spec.p) {
       const I = la.eye(spec.p);
@@ -475,6 +481,60 @@
     editor.setFitResult(ev.ok ? { est: ev.est } : null);
     renderData();
     refreshParam();
+    if (target) glideLayout(target);
+  }
+
+  // Rotate / mirror layout `next` (orthogonal Procrustes on the items both
+  // layouts share) so it lines up with `prev`; then rescale each axis to [-1, 1]
+  // like qgraph does.
+  function alignLayout(next, prev) {
+    if (!prev) return next;
+    const n = Math.min(next.length, prev.length);
+    if (n < 2) return next;
+    let ax = 0, ay = 0, bx = 0, by = 0;
+    for (let i = 0; i < n; i++) { ax += next[i][0]; ay += next[i][1]; bx += prev[i][0]; by += prev[i][1]; }
+    ax /= n; ay /= n; bx /= n; by /= n;
+    const best = (flip) => {
+      let s1 = 0, s2 = 0;
+      for (let i = 0; i < n; i++) {
+        const x = next[i][0] - ax, y = (next[i][1] - ay) * (flip ? -1 : 1), u = prev[i][0] - bx, v = prev[i][1] - by;
+        s1 += x * u + y * v; s2 += x * v - y * u;
+      }
+      return { flip, th: Math.atan2(s2, s1), score: Math.hypot(s1, s2) };
+    };
+    const a = best(false), b = best(true), t = b.score > a.score + 1e-9 ? b : a;
+    const c = Math.cos(t.th), s = Math.sin(t.th);
+    const out = next.map(([x0, y0]) => {
+      const x = x0 - ax, y = (y0 - ay) * (t.flip ? -1 : 1);
+      return [x * c - y * s, x * s + y * c];
+    });
+    const xs = out.map(p => p[0]), ys = out.map(p => p[1]);
+    const rx = [Math.min(...xs), Math.max(...xs)], ry = [Math.min(...ys), Math.max(...ys)];
+    const sc = (v, r) => (r[1] - r[0] > 1e-12 ? (v - r[0]) / (r[1] - r[0]) * 2 - 1 : 0);
+    return out.map(([x, y]) => [sc(x, rx), sc(y, ry)]);
+  }
+  // nodes glide from the current to the new layout
+  let glide = null;
+  function glideLayout(target) {
+    const from = G.learnLayout.map(p => p.slice());
+    if (glide) cancelAnimationFrame(glide);
+    const t0 = performance.now(), dur = 700;
+    const step = (now) => {
+      if (G.mode !== 'learn' || !G.cur || !G.cur.dash) { glide = null; return; }
+      const t = Math.min(1, (now - t0) / dur), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      G.learnLayout = from.map((p, i) => [p[0] + (target[i][0] - p[0]) * e, p[1] + (target[i][1] - p[1]) * e]);
+      G.cur.dash.layout = G.learnLayout;
+      renderNetworks();
+      glide = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    glide = requestAnimationFrame(step);
+  }
+  function renderNetworks() {
+    const d = G.cur.dash;
+    if (!visible(DD.root)) return;
+    P.network(DD.svg('net'), d.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
+    P.network(DD.svg('pcor'), d.G, d.layout, { maximum: d.maxG, onHover: hover('pcor') });
+    applyHighlight(hlSet(), HL.pair);
   }
 
   // ---- value popup ----
@@ -525,6 +585,25 @@
     }
     const what = info.kind === 'rvar' ? 'standardized (share of the item\'s variance)' : 'standardized';
     $('pr-std').innerHTML = std === null ? '' : `${what}: <b>${f2(std)}</b>`;
+    paintSlider(info, std);
+  }
+  // the bar runs from 0 to the value, in the colour the path gets
+  function paintSlider(info, std) {
+    const P2 = PARAM[info.kind], r = $('pr-range');
+    const pos = (v) => 100 * (Math.max(P2.min, Math.min(P2.max, v)) - P2.min) / (P2.max - P2.min);
+    const v = +r.value, z = pos(0), p = pos(v);
+    const s = std === null || !isFinite(std) ? Math.sign(v) * 0.6 : std;
+    const col = P.fade(v >= 0 ? P.POS : P.NEG, Math.max(0.22, Math.min(1, Math.abs(s))));
+    const a = Math.min(z, p), b = Math.max(z, p), base = '#E2DDD2';
+    r.style.setProperty('--pr-track', `linear-gradient(to right, ${base} 0%, ${base} ${a}%, ${col} ${a}%, ${col} ${b}%, ${base} ${b}%, ${base} 100%)`);
+    r.style.setProperty('--pr-col', col);
+    // tick at zero (only when 0 lies inside the range)
+    const zero = $('pr-zero');
+    zero.hidden = !(P2.min < 0 && P2.max > 0);
+    if (!zero.hidden) {
+      const w = r.offsetWidth, thumb = 20;
+      zero.style.left = (r.offsetLeft + thumb / 2 + (w - thumb) * z / 100 - 1) + 'px';
+    }
   }
   function applyParam(v, relayout) {
     if (!paramT) return;
@@ -537,6 +616,8 @@
   let paramRAF = null;
   $('pr-range').addEventListener('input', () => {
     $('pr-num').value = (+$('pr-range').value).toFixed(2);
+    const info = paramT && editor.getValue(paramT);
+    if (info) paintSlider(info, null);
     if (paramRAF) return;
     paramRAF = requestAnimationFrame(() => { paramRAF = null; applyParam(+$('pr-range').value, false); });
   });

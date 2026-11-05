@@ -56,7 +56,7 @@
       const p = Math.max(S.obs.length, 1);
       const side = Math.max(16, Math.min(48, W / (p + 2.2), H / 7.5));
       // rr: radius of the (invisible) residual node; stub: arrow length into the item
-      return { side, half: side / 2, R: side * 0.66, rr: Math.max(9, side * 0.3), stub: side * 0.42 };
+      return { side, half: side / 2, R: side * 0.66, rr: Math.max(9, side * 0.3), stub: side * (S.learn ? 0.8 : 0.42) };
     }
     function px(n) { return [n.x * W, n.y * H]; }
     function node(id) { return S.obs.find(o => o.id === id) || S.lat.find(l => l.id === id); }
@@ -443,7 +443,10 @@
       const a = residAnchor(o);
       const fe = S.fit && !S.stale ? S.fit.resid[o.idx] : null;
       const g = el('g', { class: 'd-resid' + (fe ? ' fitted' : '') + (S.sel.has('v:' + o.id) ? ' sel' : ''), 'data-obs': o.id }, gEdges);
-      if (S.learn) el('circle', { cx: a.c[0], cy: a.c[1], r: a.rr + 4, class: 'd-resid-hit' }, g);
+      if (S.learn) {
+        el('line', { x1: a.c[0], y1: a.c[1], x2: a.tip[0], y2: a.tip[1], class: 'd-resid-hit line' }, g);
+        el('circle', { cx: a.c[0], cy: a.c[1], r: a.rr + 5, class: 'd-resid-hit' }, g);
+      }
       let color = '#9AA0A8', width = 1.4;
       if (fe) {
         const v = Math.min(1, Math.abs(fe.std));
@@ -543,6 +546,10 @@
       }
       return null;
     }
+    function residFromTarget(target) {
+      const g = target && target.closest ? target.closest('.d-resid') : null;
+      return g ? node(g.getAttribute('data-obs')) : null;
+    }
     function hitEdge(target) {
       const g = target && target.closest ? target.closest('.d-edge') : null;
       return g ? g.getAttribute('data-id') : null;
@@ -637,8 +644,8 @@
         S.sel.clear(); S.sel.add(eid); render();
         drag = null;
         if (S.learn && opts.onParam) opts.onParam({ type: 'edge', id: eid }, ev);
-      } else if (S.learn && hitResid(x, y, 4)) {
-        const o = hitResid(x, y, 4);
+      } else if (S.learn && (residFromTarget(ev.target) || hitResid(x, y, 6))) {
+        const o = residFromTarget(ev.target) || hitResid(x, y, 6);
         S.sel.clear(); S.sel.add('v:' + o.id); render();
         drag = null;
         if (opts.onParam) opts.onParam({ type: 'obs', id: o.id }, ev);
