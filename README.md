@@ -87,9 +87,13 @@ So the true structure always scores 100, and nothing in it is undetectable.
 * One FIT per dataset. Not identified / not converged / improper (Heywood) →
   red error card, not counted.
 * Each dataset is worth 20 points (one decimal), a game of five 100.
-* Fit (8): χ² p ≥ .05 / ≥ .01, RMSEA < .05 / < .08, CFI ≥ .95 / ≥ .90,
-  SRMR < .08 / < .10 → 2 / 1 points each. df = 0 → no fit points.
-* Parsimony (12): 12 − 0.6 × max(0, BIC(player) − BIC(true structure)).
+* Fit (10): χ² p ≥ .05 / ≥ .01, RMSEA < .05 / < .08, CFI ≥ .95 / ≥ .90,
+  TLI ≥ .95 / ≥ .90, SRMR < .08 / < .10 → 2 / 1 points each. df = 0 → no fit
+  points. (For the baseline model itself TLI is replaced by CFI.)
+* Parsimony (10): 10 × (1 − ΔBIC / bicZero), ΔBIC = BIC(player) − BIC(true
+  structure) on the same data, with bicZero = 20 / 25 / 35 / 60 for Easy /
+  Medium / Hard / Psychometrika: harder levels have more twists and larger N,
+  so near-misses cost more BIC (`node .dev/score_calibration.js` measures this).
 * `CONFIG.ROUNDS` = 5 datasets per game, then the diploma if the total is at
   least 60 / 100 (`CONFIG.DIPLOMA`): no stars at 60, one at 70, two at 80,
   three at 90. Below 60 a "No diploma this time" sheet with a NOT AWARDED stamp. `CONFIG.LEVELS` sets each level's medal and the sample

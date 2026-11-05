@@ -36,6 +36,15 @@
       fail: 'Poor',
       axis: { min: 0.8, max: 1, ticks: [[0.8, '.80'], [0.9, '.90'], [0.95, '.95'], [1, '1']],
               zones: [['bad', 0.8, 0.9], ['ok', 0.9, 0.95], ['good', 0.95, 1]] } },
+    { key: 'tli', name: 'TLI', sub: 'penalizes complexity',
+      // for the baseline (independence) model itself TLI is 0 by construction; use CFI there
+      value: (r) => Math.min(1, r.df === r.dfBaseline ? r.cfi : r.tli),
+      main: (r) => f3(r.df === r.dfBaseline ? Math.min(1, r.cfi) : r.tli), small: (r) => (r.df === r.dfBaseline ? 'as CFI (baseline model)' : ''),
+      tiers: [{ test: (v) => v >= 0.95, cls: 'good', pts: 2, label: 'Good' },
+              { test: (v) => v >= 0.90, cls: 'ok', pts: 1, label: 'Acceptable' }],
+      fail: 'Poor',
+      axis: { min: 0.8, max: 1, ticks: [[0.8, '.80'], [0.9, '.90'], [0.95, '.95'], [1, '1']],
+              zones: [['bad', 0.8, 0.9], ['ok', 0.9, 0.95], ['good', 0.95, 1]] } },
     { key: 'srmr', name: 'SRMR', sub: 'residual correlations', value: (r) => r.srmr,
       main: (r) => f3(r.srmr), small: () => '',
       tiers: [{ test: (v) => v < 0.08, cls: 'good', pts: 2, label: 'Good' },
@@ -47,22 +56,22 @@
 
   const CONFIG = {
     ROUNDS: 5,                                // datasets per game, then the diploma
-    BIC_MAX: 12,                              // parsimony points ...
-    BIC_COST: 0.6,                            // ... minus this per BIC point above the true model
+    BIC_MAX: 10,                              // parsimony points, lost linearly with the BIC above the true model;
+                                              // all gone at LEVELS[l].bicZero (more lenient at harder levels)
     DIPLOMA: { pass: 60, stars: [70, 80, 90] },   // % of the game maximum (5 x 20 = 100)
     SUPPORT_BIC: 2,                           // every feature of the truth must be worth >= 2 BIC
     RESID_MAX: 0.25,                          // colour scale for residual correlations
     RESID_MAX_P: 0.35,                        // ... and residual partial correlations
     LEVELS: {                                 // name, medal on the diploma, sample sizes drawn per round
-      1: { name: 'Easy', medal: 'bronze', N: [150, 200, 250, 300, 400, 500] },
-      2: { name: 'Medium', medal: 'silver', N: [150, 200, 250, 300, 400, 500] },
-      3: { name: 'Hard', medal: 'gold', N: [150, 200, 250, 300, 400, 500] },
-      4: { name: 'Psychometrika', medal: 'platinum', N: [300, 400, 500, 750, 1000] },
+      1: { name: 'Easy', medal: 'bronze', N: [150, 200, 250, 300, 400, 500], bicZero: 20 },
+      2: { name: 'Medium', medal: 'silver', N: [150, 200, 250, 300, 400, 500], bicZero: 25 },
+      3: { name: 'Hard', medal: 'gold', N: [150, 200, 250, 300, 400, 500], bicZero: 35 },
+      4: { name: 'Psychometrika', medal: 'platinum', N: [300, 400, 500, 750, 1000], bicZero: 60 },
     },
     CRITERIA,
   };
   const FIT_MAX = CRITERIA.reduce((s, c) => s + c.tiers[0].pts, 0);
-  const MAX_ROUND = FIT_MAX + CONFIG.BIC_MAX;           // 8 + 12 = 20 per dataset
+  const MAX_ROUND = FIT_MAX + CONFIG.BIC_MAX;           // 10 + 10 = 20 per dataset
   const round1 = (v) => Math.round(v * 10) / 10;
   const fmtPts = (v) => round1(v).toFixed(1);
   // the true model must reach the top tier of every criterion on its sample
@@ -943,8 +952,9 @@
     const cmp = FF.bank.compareStructure(c.data.spec, spec);
     let dBIC = res.bic - c.data.trueFit.bic;
     if (cmp.exact) dBIC = 0;
-    const bicPts = Math.max(0, round1(CONFIG.BIC_MAX - CONFIG.BIC_COST * Math.max(0, dBIC)));
-    const bicCls = bicPts >= CONFIG.BIC_MAX - 2 * CONFIG.BIC_COST ? 'good' : bicPts >= CONFIG.BIC_MAX / 2 ? 'ok' : 'bad';
+    const zero = CONFIG.LEVELS[G.level].bicZero;
+    const bicPts = Math.max(0, round1(CONFIG.BIC_MAX * (1 - Math.max(0, dBIC) / zero)));
+    const bicCls = Math.max(0, dBIC) <= 2 ? 'good' : bicPts >= CONFIG.BIC_MAX / 2 ? 'ok' : 'bad';
     return { rows, saturated, fitPts, dBIC, bicPts, bicCls, total: round1(fitPts + bicPts), cmp };
   }
 
@@ -1138,6 +1148,8 @@
     if (sc.fitPts === FIT_MAX && dp > 0) return `Good fit, but your model has ${dp} more parameter${dp === 1 ? '' : 's'} than the true model.`;
     if (sc.fitPts < FIT_MAX && dp < 0) return 'Your model is too simple: it misses structure that is in the data. Check the residuals.';
     if (sc.fitPts < FIT_MAX) return 'Some structure in the data is not captured. Check the residuals.';
+    if (dp < 0) return 'Good fit, but the data support a bit more structure than your model has (the true model has a lower BIC).';
+    if (dp === 0) return 'As many parameters as the true model, but a slightly different structure.';
     return 'Close, but not the most parsimonious description of these data.';
   }
 
@@ -1173,7 +1185,7 @@
           <span class="bic-cmp">BIC yours <b>${r.bic.toFixed(1)}</b> &middot; true model <b>${c.data.trueFit.bic.toFixed(1)}</b> &middot; Δ <b>${sign(sc.dBIC)}</b></span>
         </div>
         <div class="bic-bar"><span class="bic-fill" id="bic-fill"></span></div>
-        <div class="bic-foot"><span>&minus;${CONFIG.BIC_COST} points per BIC point above the true model</span><b><span id="bic-pts">${fmtPts(CONFIG.BIC_MAX)}</span> / ${CONFIG.BIC_MAX}</b></div>
+        <div class="bic-foot"><span>&minus;1 point per ${+(CONFIG.LEVELS[G.level].bicZero / CONFIG.BIC_MAX).toFixed(1)} BIC points above the true model</span><b><span id="bic-pts">${fmtPts(CONFIG.BIC_MAX)}</span> / ${CONFIG.BIC_MAX}</b></div>
       </div>
       <div class="total-block" id="total-block">
         <div class="total-num"><span id="total-num">0</span><small> / ${MAX_ROUND}</small></div>

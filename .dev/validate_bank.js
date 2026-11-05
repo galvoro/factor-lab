@@ -13,7 +13,7 @@ const Ns = process.argv.slice(3).map(Number).filter(Boolean);
 if (!Ns.length) Ns.push(150, 500);
 
 // must match CONFIG.CRITERIA in game.js (top tier of every fit criterion)
-const accept = (f) => f.pvalue >= 0.05 && f.rmsea < 0.05 && f.cfi >= 0.95 && f.srmr < 0.08;
+const accept = (f) => f.pvalue >= 0.05 && f.rmsea < 0.05 && f.cfi >= 0.95 && Math.min(1, f.df === f.dfBaseline ? f.cfi : f.tli) >= 0.95 && f.srmr < 0.08;
 
 const q = (xs, p) => { const s = xs.slice().sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 let bad = 0;

@@ -17,8 +17,8 @@
       body: 'Five datasets per game, <b>one FIT</b> each. If the model cannot be estimated, fix it and try again for free. ' +
         'Then compare the model with the data.' },
     { title: 'SCORING', c: '#79808C',
-      body: 'Each dataset is worth 20 points. <b>Fit (8):</b> χ² test, RMSEA, CFI and SRMR give 2 points each if good, 1 if acceptable. ' +
-        '<b>Parsimony (12):</b> −0.6 per BIC point above the true model. A diploma needs 60 of 100.' },
+      body: 'Each dataset is worth 20 points. <b>Fit (10):</b> χ² test, RMSEA, CFI, TLI and SRMR give 2 points each if good, 1 if acceptable. ' +
+        '<b>Parsimony (10):</b> you lose points for every BIC point above the true model (less at harder levels). A diploma needs 60 of 100.' },
   ];
 
   const LEARN_CARDS = [
