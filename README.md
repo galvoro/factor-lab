@@ -50,8 +50,13 @@ on white in every theme (`.panel, .canvas-wrap, .truth-fig` reset the tokens).
   prompts in `.dev/media_prompts.txt` (originals in `.dev/media/`).
 * `cover.png` (1254 x 1254): Galvoro square cover (copy in
   `~/GitHub_galvoro/squareimg/` for the upload script).
-* `assets/bgm.mp3` ("Quiet Calibration", Gemini): background loop, played quietly
-  by `audio.js` after the first click; the ♪ button mutes it.
+* `assets/bgm.mp3` ("Quiet Calibration", Gemini): background music, played quietly
+  by `audio.js` after the first click; the ♪ button mutes it. It is decoded with
+  WebAudio and looped seamlessly: the first pass plays the intro, then a 27-bar
+  cycle with a one-bar equal-power crossfade before the track's fade-out
+  (`BGM_LOOP` in `audio.js`). For a new track, find loop points with
+  `node .dev/analyze_bgm.js` and `node .dev/loop_points.js`, and check the seam
+  with `node .dev/check_bgm_loop.js`.
 * `.dev/make_art.js` + `.dev/render_cover.js`: the earlier vector version of the
   key art, kept as an alternative.
 

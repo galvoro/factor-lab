@@ -1,10 +1,12 @@
 // FACTOR LAB — audio module.
 //
-// WebAudio synth SFX + HTMLAudio BGM. Exposes window.GaltonAudio
+// WebAudio synth SFX + background music. Exposes window.GaltonAudio
 // (shared name convention across Galvoro Capsules so a future
 // audio.js upgrade can ship everywhere without rewiring callers).
-// BGM auto-loops assets/bgm.mp3 when present; the capsule works
-// silently when the file is missing.
+// BGM: assets/bgm.mp3 is decoded with WebAudio and looped seamlessly
+// (sample-accurate, crossfaded at a bar line before the track's fade-out;
+// see BGM_LOOP). Falls back to a plain HTMLAudio loop, and the capsule
+// works silently when the file is missing.
 
 (function (global) {
   let ctx = null;
@@ -19,34 +21,97 @@
     return ctx;
   }
 
-  // -------- BGM (auto-loops assets/bgm.mp3 if present) --------
-  let bgmEl = null;
+  // -------- BGM --------
+  // Loop points for assets/bgm.mp3 ("Quiet Calibration", 110.9 BPM, bar
+  // 2.164 s), from .dev/loop_points.js: the first pass plays the original
+  // intro; after 27 bars + 1 bar of crossfade (60.6 s, before the fade-out)
+  // the music blends back into bar 2 and loops a 27-bar cycle, on the beat.
+  // Set BGM_LOOP = null to loop the whole file instead.
+  const BAR = 4 * 0.5409;
+  const BGM_LOOP = { length: 27 * BAR, crossfade: BAR };
   let bgmTargetVolume = 0.18;
-  function bgmEnsure() {
-    if (bgmEl) return bgmEl;
+  let bgmWanted = false;
+  let bgm = null;            // { buf, loopStart, loopEnd } once decoded
+  let bgmLoading = null;
+  let bgmSrc = null, bgmGain = null;
+  let bgmEl = null;          // HTMLAudio fallback
+
+  function makeLoop(c, raw) {
+    const sr = raw.sampleRate;
+    if (!BGM_LOOP) return { buf: raw, loopStart: 0, loopEnd: raw.duration };
+    const X = Math.round(BGM_LOOP.crossfade * sr), Lp = Math.round(BGM_LOOP.length * sr), E = Lp + X;
+    if (E > raw.length) return { buf: raw, loopStart: 0, loopEnd: raw.duration };
+    const out = c.createBuffer(raw.numberOfChannels, E, sr);
+    for (let ch = 0; ch < raw.numberOfChannels; ch++) {
+      const a = raw.getChannelData(ch), o = out.getChannelData(ch);
+      o.set(a.subarray(0, E));
+      // last bar: equal-power crossfade from the music at that point into
+      // the opening bar, so jumping from E back to X is seamless
+      for (let i = 0; i < X; i++) {
+        const t = (i + 0.5) / X;
+        o[Lp + i] = a[Lp + i] * Math.cos(t * Math.PI / 2) + a[i] * Math.sin(t * Math.PI / 2);
+      }
+    }
+    return { buf: out, loopStart: X / sr, loopEnd: E / sr };
+  }
+  function bgmLoad(c) {
+    if (bgm || bgmLoading) return bgmLoading;
+    bgmLoading = fetch('assets/bgm.mp3')
+      .then(r => { if (!r.ok) throw new Error('no bgm'); return r.arrayBuffer(); })
+      .then(ab => new Promise((res, rej) => c.decodeAudioData(ab, res, rej)))
+      .then(raw => { bgm = makeLoop(c, raw); })
+      .catch(() => { bgm = null; bgmFallback(); });
+    return bgmLoading;
+  }
+  function bgmFallback() {
+    if (bgmEl) return;
     try {
       bgmEl = new Audio('assets/bgm.mp3');
       bgmEl.loop = true;
       bgmEl.preload = 'auto';
       bgmEl.volume = muted ? 0 : bgmTargetVolume;
+      if (bgmWanted) bgmEl.play().catch(() => {});
     } catch (e) { bgmEl = null; }
-    return bgmEl;
+  }
+  function bgmPlay(c) {
+    if (!bgmWanted || bgmSrc || !bgm) return;
+    if (!bgmGain) { bgmGain = c.createGain(); bgmGain.connect(c.destination); }
+    bgmGain.gain.setValueAtTime(muted ? 0 : bgmTargetVolume, c.currentTime);
+    const src = c.createBufferSource();
+    src.buffer = bgm.buf;
+    src.loop = true;
+    src.loopStart = bgm.loopStart;
+    src.loopEnd = bgm.loopEnd;
+    src.connect(bgmGain);
+    src.start();
+    bgmSrc = src;
   }
   function bgmStart() {
-    const a = bgmEnsure();
-    if (!a) return;
-    a.volume = muted ? 0 : bgmTargetVolume;
-    a.play().catch(() => {});       // ignored before first user gesture
+    bgmWanted = true;
+    if (bgmEl) { bgmEl.volume = muted ? 0 : bgmTargetVolume; bgmEl.play().catch(() => {}); return; }
+    const c = ensure();
+    if (!c || !global.fetch) { bgmFallback(); return; }
+    if (bgm) bgmPlay(c);
+    else bgmLoad(c).then(() => { if (bgm) bgmPlay(c); });
   }
-  function bgmStop()  { if (bgmEl) { try { bgmEl.pause(); } catch (e) {} } }
+  function bgmStop() {
+    bgmWanted = false;
+    if (bgmSrc) { try { bgmSrc.stop(); } catch (e) {} bgmSrc = null; }
+    if (bgmEl) { try { bgmEl.pause(); } catch (e) {} }
+  }
+  function applyBgmVolume() {
+    const v = muted ? 0 : bgmTargetVolume;
+    if (bgmGain && ctx) bgmGain.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+    if (bgmEl) bgmEl.volume = v;
+  }
   function bgmSetVolume(v) {
     bgmTargetVolume = Math.max(0, Math.min(1, v));
-    if (bgmEl && !muted) bgmEl.volume = bgmTargetVolume;
+    applyBgmVolume();
   }
 
   function setMuted(m) {
     muted = m;
-    if (bgmEl) bgmEl.volume = muted ? 0 : bgmTargetVolume;
+    applyBgmVolume();
   }
   function isMuted() { return muted; }
 
@@ -117,5 +182,6 @@
   global.GaltonAudio = {
     SFX, tone, noise, setMuted, isMuted, ensure,
     bgm: { start: bgmStart, stop: bgmStop, setVolume: bgmSetVolume },
+    _loop: { makeLoop, BGM_LOOP },          // for .dev/check_bgm_loop.js
   };
 })(window);
