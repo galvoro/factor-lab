@@ -28,8 +28,15 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8765/';
     for (let k = 0; k < keys.length; k++) {
       const j = keys[k];
       const items = groups[j].filter(i => { if (seen.has(i)) { extra.push([k, i]); return false; } seen.add(i); return true; });
-      await sel(items);
-      await dbl((k + 1) / (keys.length + 1), 0.12);           // double-click = factor with loadings
+      if (k === 0) {                                          // picker: double-click, click items, OK
+        await dbl((k + 1) / (keys.length + 1), 0.12);
+        if (!(await b.eval('FF.game.debug.editor.picking'))) throw new Error('picker did not open');
+        await sel(items);
+        await b.clickSel('#pp-ok'); await sleep(150);
+      } else {                                                // shortcut: select items, then double-click
+        await sel(items);
+        await dbl((k + 1) / (keys.length + 1), 0.12);
+      }
     }
     // the factor ids follow creation order
     const fid = (k) => 'f' + (k + 1);
@@ -83,8 +90,8 @@ const BASE = process.argv[2] || 'http://127.0.0.1:8765/';
   try {
     await b.goto(BASE + 'index.html?seed=2024');
     // ---- game 1: Easy, the truth ----
-    await b.clickSel('#level-seg button[data-level="1"]');
     await b.clickSel('#btn-play'); await sleep(400);
+    await b.clickSel('.level-card[data-level="1"]'); await sleep(400);
     await b.clickSel('#tut-continue'); await sleep(900);
     let spec = JSON.parse(await b.eval('JSON.stringify(FF.game.cur.data.spec)'));
     await drawTruth(spec);

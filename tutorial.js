@@ -10,10 +10,10 @@
         'The left side shows their correlations four ways: a <b>scree plot</b>, a <b>heatmap</b>, a <b>correlation network</b> and a ' +
         '<b>partial correlation network</b> (<span class="pos">blue</span> = positive, <span class="neg">red</span> = negative, stronger = darker and thicker).' },
     { title: 'DRAW A MODEL', c: '#2B2F36',
-      body: 'Items are the numbered squares. <b>Click items</b> to select them, then <b>double-click</b> the canvas (or press <b>+ Factor</b>): ' +
-        'a factor appears with loadings to those items. <b>Loading</b> draws more factor → item arrows. <b>Correlate</b> links the residuals of two items ' +
-        '(the small circles under them) or two factors. New factors start out correlated with the others: <b>Erase</b> the curved arrow to make them independent. ' +
-        'Keys: <span class="k">V</span> <span class="k">F</span> <span class="k">A</span> <span class="k">C</span> <span class="k">E</span> tools, <span class="k">T</span> tidy, <span class="k">⌘/Ctrl Z</span> undo.' },
+      body: 'Items are the numbered squares. <b>Double-click</b> the canvas to add a factor, then <b>click the items it measures</b> and press OK. ' +
+        '(Shortcut: select items first, then double-click.) Double-click a factor to change its items. <b>Loading</b> draws single factor → item arrows; ' +
+        '<b>Correlate</b> links the residuals of two items (the small circles under them) or two factors. New factors start out correlated with the others: ' +
+        '<b>Erase</b> the curved arrow to make them independent. Keys: <span class="k">V</span> <span class="k">F</span> <span class="k">A</span> <span class="k">C</span> <span class="k">E</span> tools, <span class="k">T</span> tidy, <span class="k">⌘/Ctrl Z</span> undo.' },
     { title: 'ONE FIT', c: '#2E8B57',
       body: 'You get <b>one FIT</b> per dataset, estimated by maximum likelihood as in lavaan. If the model cannot be estimated ' +
         '(not identified, no convergence, or a Heywood case such as a negative variance) you get an error and can fix it for free. ' +

@@ -45,6 +45,8 @@
     let anim = null;
     let fitAnim = null;
     let lastTap = null;        // for double-click / double-tap on the background
+    let lastNodeTap = null;    // ... and on a factor
+    let pick = null;           // indicator picking for one factor: { fid, isNew, items: Set }
 
     // ---------------- geometry ----------------
     function dims() {
@@ -150,6 +152,7 @@
     }
     function removeIds(ids) {
       if (!ids.length) return;
+      if (pick && ids.includes(pick.fid)) cancelPick();
       pushHistory();
       const set = new Set(ids);
       S.lat = S.lat.filter(l => !set.has(l.id));
@@ -178,7 +181,51 @@
       S.sel.clear();
       GA('place');
       changed(true);
+      if (!isStatic && !(items && items.length) && opts.pickOnNew !== false) startPick(id, true);
       return id;
+    }
+
+    // ---------------- indicator picking ----------------
+    function pickInfo() {
+      const l = node(pick.fid);
+      if (!l) return null;
+      const [x, y] = px(l);
+      const avoid = S.lat.filter(o => o.id !== pick.fid).map(o => px(o)).concat(S.obs.map(o => px(o)));
+      return { fid: pick.fid, n: pick.items.size, isNew: pick.isNew, x, y, R: dims().R, W, H, avoid, side: dims().side };
+    }
+    function notifyPick() { if (opts.onPick) opts.onPick(pick ? pickInfo() : null); }
+    function startPick(fid, isNew) {
+      if (pick) commitPick();
+      pick = { fid, isNew: !!isNew, items: new Set(S.edges.filter(e => e.kind === 'load' && e.a === fid).map(e => e.b)) };
+      S.sel.clear(); pending = null;
+      render();
+      if (opts.onSelect) opts.onSelect(selection());
+    }
+    function commitPick() {
+      if (!pick) return;
+      const p = pick; pick = null;
+      const cur = new Set(S.edges.filter(e => e.kind === 'load' && e.a === p.fid).map(e => e.b));
+      const add = S.obs.map(o => o.id).filter(id => p.items.has(id) && !cur.has(id));
+      const del = [...cur].filter(id => !p.items.has(id));
+      if (add.length || del.length) {
+        pushHistory();
+        S.edges = S.edges.filter(e => !(e.kind === 'load' && e.a === p.fid && del.includes(e.b)));
+        for (const it of add) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'load', a: p.fid, b: it });
+        GA('connect');
+        changed(true);
+      } else render();
+      notifyPick();
+    }
+    function cancelPick() {
+      if (!pick) return;
+      pick = null;
+      render();
+      notifyPick();
+    }
+    function pickAll(on) {
+      if (!pick) return;
+      pick.items = new Set(on ? S.obs.map(o => o.id) : []);
+      render();
     }
 
     function GA(name) { const a = global.GaltonAudio; if (a && a.SFX && a.SFX[name]) a.SFX[name](); }
@@ -298,7 +345,8 @@
       const A = node(e.a), B = node(e.b);
       if (!A || !B) return;
       const st = edgeStyle(e);
-      const g = el('g', { class: 'd-edge' + (S.sel.has(e.id) ? ' sel' : ''), 'data-id': e.id }, gEdges);
+      const dropping = pick && e.kind === 'load' && e.a === pick.fid && !pick.items.has(e.b);
+      const g = el('g', { class: 'd-edge' + (S.sel.has(e.id) ? ' sel' : '') + (dropping ? ' dropping' : ''), 'data-id': e.id }, gEdges);
       const head = Math.max(9, dims().side * 0.24) + st.width * 0.9;
       let pathD, labelPos;
       if (e.kind === 'cov' && !isLat(e.a)) {
@@ -409,9 +457,10 @@
       if (S.fit && !S.stale) es.sort((a, b) => Math.abs((S.fit.map[a.id] || {}).std || 0) - Math.abs((S.fit.map[b.id] || {}).std || 0));
       for (const o of S.obs) drawResidual(o);
       for (const e of es) drawEdge(e);
+      if (pick) drawPickPreview();
       for (const l of S.lat) {
         const [x, y] = px(l);
-        const g = el('g', { class: 'd-node lat' + (S.sel.has(l.id) ? ' sel' : '') + (pending === l.id ? ' pending' : ''), 'data-id': l.id }, gNodes);
+        const g = el('g', { class: 'd-node lat' + (S.sel.has(l.id) ? ' sel' : '') + (pending === l.id ? ' pending' : '') + (pick && pick.fid === l.id ? ' picking' : ''), 'data-id': l.id }, gNodes);
         el('circle', { cx: x, cy: y, r: d.R + 6, class: 'd-halo' }, g);
         el('circle', { cx: x, cy: y, r: d.R, class: 'd-shape' }, g);
         if (l.label) {
@@ -421,14 +470,33 @@
       }
       for (const o of S.obs) {
         const [x, y] = px(o);
-        const g = el('g', { class: 'd-node obs' + (S.sel.has(o.id) ? ' sel' : '') + (pending === o.id ? ' pending' : '') + (S.hl.has(o.idx) ? ' hl' : ''), 'data-id': o.id }, gNodes);
+        const g = el('g', { class: 'd-node obs' + (S.sel.has(o.id) ? ' sel' : '') + (pending === o.id ? ' pending' : '') + (S.hl.has(o.idx) ? ' hl' : '') + (pick && pick.items.has(o.id) ? ' picked' : ''), 'data-id': o.id }, gNodes);
         el('rect', { x: x - d.half - 5, y: y - d.half - 5, width: d.side + 10, height: d.side + 10, rx: 6, class: 'd-halo' }, g);
         el('rect', { x: x - d.half, y: y - d.half, width: d.side, height: d.side, class: 'd-shape' }, g);
         const t = el('text', { x, y, 'font-size': d.side * 0.46, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-label' }, g);
         t.textContent = String(o.idx + 1);
       }
       svg.classList.toggle('fitted', !!(S.fit && !S.stale));
+      svg.classList.toggle('picking', !!pick);
+      if (pick) notifyPick();
       if (opts.onRender) opts.onRender();
+    }
+
+    // dashed preview of the loadings the picker will create; loadings it will
+    // remove are faded out by drawEdge
+    function drawPickPreview() {
+      const F = node(pick.fid);
+      if (!F) return;
+      const [fx, fy] = px(F);
+      const have = new Set(S.edges.filter(e => e.kind === 'load' && e.a === pick.fid).map(e => e.b));
+      for (const id of pick.items) {
+        if (have.has(id)) continue;
+        const O = node(id);
+        const [ox, oy] = px(O);
+        const L = hyp(ox - fx, oy - fy) || 1, ux = (ox - fx) / L, uy = (oy - fy) / L;
+        const s = boundary(F, ux, uy), t = boundary(O, -ux, -uy);
+        el('line', { x1: s[0], y1: s[1], x2: t[0], y2: t[1], class: 'd-preview' }, gEdges);
+      }
     }
 
     // ---------------- interaction ----------------
@@ -472,9 +540,31 @@
       const [x, y] = pt(ev);
       const tool = S.tool;
       const slop = ev.pointerType === 'touch' ? 12 : 5;
-      const n = hitNode(x, y, slop) || (tool === 'cov' || tool === 'arrow' ? hitResid(x, y, slop) : null);
+      const n = hitNode(x, y, slop) || (tool === 'cov' || tool === 'arrow' || pick ? hitResid(x, y, slop) : null);
       const eid = n ? null : hitEdge(ev.target);
       drag = { x0: x, y0: y, moved: false, node: n, edge: eid, tool, shift: ev.shiftKey || ev.metaKey || ev.ctrlKey };
+
+      // picking indicators for a factor: clicks on items toggle them
+      if (pick) {
+        drag = null;
+        if (n && n.kind === 'obs') {
+          if (pick.items.has(n.id)) pick.items.delete(n.id); else pick.items.add(n.id);
+          GA('click');
+          render();
+        }
+        return;
+      }
+
+      // double-click / double-tap on a factor: pick its indicators
+      if (n && n.kind === 'lat' && tool !== 'erase') {
+        const now = performance.now();
+        if (lastNodeTap && lastNodeTap.id === n.id && now - lastNodeTap.t < 420) {
+          lastNodeTap = null; drag = null; pending = null; lastTap = null;
+          startPick(n.id, false);
+          return;
+        }
+        lastNodeTap = { id: n.id, t: now };
+      } else lastNodeTap = null;
 
       // double-click / double-tap on empty canvas: new factor there, with
       // loadings to the items that were selected before the first click
@@ -483,8 +573,8 @@
         if (lastTap && now - lastTap.t < 420 && hyp(x - lastTap.x, y - lastTap.y) < 26) {
           const items = lastTap.items;
           lastTap = null; drag = null; pending = null;
-          addFactor(clampN(x / W), clampN(y / H), items);
           if (tool === 'factor') setTool('select');
+          addFactor(clampN(x / W), clampN(y / H), items);
           if (opts.onSelect) opts.onSelect(selection());
           return;
         }
@@ -500,9 +590,9 @@
       if (tool === 'factor') {
         if (!n && !eid) {
           lastTap = null;
-          addFactor(clampN(x / W), clampN(y / H), []);
-          setTool('select');
           drag = null;
+          setTool('select');
+          addFactor(clampN(x / W), clampN(y / H), []);
         }
         return;
       }
@@ -539,9 +629,9 @@
       if (!drag) {
         // hover feedback
         const n = hitNode(x, y, 4);
-        svg.style.cursor = n ? (S.tool === 'select' ? 'grab' : (S.tool === 'erase' && n.kind !== 'lat' ? 'not-allowed' : 'crosshair'))
+        svg.style.cursor = pick ? (n && n.kind === 'obs' ? 'pointer' : 'default') : n ? (S.tool === 'select' ? 'grab' : (S.tool === 'erase' && n.kind !== 'lat' ? 'not-allowed' : 'crosshair'))
           : (S.tool === 'factor' ? 'copy' : S.tool === 'erase' ? 'pointer' : 'default');
-        if (opts.onHoverNode) opts.onHoverNode(n && n.kind === 'obs' ? n.idx : null);
+        if (opts.onHoverNode) opts.onHoverNode(n && n.kind === 'obs' ? n.idx : null, ev);
         return;
       }
       const dist = hyp(x - drag.x0, y - drag.y0);
@@ -637,6 +727,7 @@
 
     // ---------------- public API ----------------
     function setTool(t) {
+      if (pick) commitPick();
       S.tool = t;
       pending = null;
       svg.dataset.tool = t;
@@ -645,7 +736,8 @@
     }
     function reset(p) {
       S.obs = []; S.lat = []; S.edges = []; S.nextLat = 1; S.nextEdge = 1;
-      S.sel.clear(); S.fit = null; S.fitT = 1; S.stale = false; S.history = []; pending = null; lastTap = null;
+      S.sel.clear(); S.fit = null; S.fitT = 1; S.stale = false; S.history = []; pending = null; lastTap = null; lastNodeTap = null;
+      if (pick) { pick = null; notifyPick(); }
       if (fitAnim) { cancelAnimationFrame(fitAnim); fitAnim = null; }
       for (let i = 0; i < p; i++) {
         S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: p === 1 ? 0.5 : 0.08 + 0.84 * i / (p - 1), y: Y_OBS });
@@ -668,12 +760,14 @@
       return addFactor(x, y, items);
     }
     function undo() {
+      if (pick) { cancelPick(); return; }
       if (!S.history.length) { msg('Nothing to undo.', 'info'); return; }
       restore(S.history.pop());
       pending = null;
       changed(true);
     }
     function clearModel() {
+      if (pick) cancelPick();
       if (!S.lat.length && !S.edges.length) return;
       pushHistory();
       S.lat = []; S.edges = []; S.sel.clear();
@@ -779,6 +873,8 @@
       get showValues() { return S.showValues; },
       get counts() { return { factors: S.lat.length, edges: S.edges.length }; },
       get edges() { return S.edges.map(x => Object.assign({}, x)); },
+      get picking() { return !!pick; },
+      startPick, commitPick, cancelPick, pickAll,
       cancelPending() { pending = null; render(); },
     };
     return api;

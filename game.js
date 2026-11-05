@@ -116,7 +116,8 @@
       document.querySelectorAll('.tool').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
       updateFactorButton();
     },
-    onHoverNode: (idx) => highlight(idx === null ? null : [idx], 'canvas'),
+    onHoverNode: (idx, ev) => highlight(idx === null ? null : [idx], 'canvas', ev),
+    onPick: (info) => placePicker(info),
   });
   const truthView = FF.editor.create($('truth-canvas'), { static: true });
 
@@ -148,6 +149,41 @@
     $('factor-label').textContent = n ? `Factor (${n})` : 'Factor';
     $('btn-factor').classList.toggle('ready', n > 0);
   }
+
+  // ------------------------------------------------------------------
+  // Indicator picker (after adding a factor, or double-clicking one)
+  // ------------------------------------------------------------------
+  const pickPop = $('pick-pop');
+  function placePicker(info) {
+    if (!info) { pickPop.classList.add('hidden'); return; }
+    hideTip();
+    pickPop.classList.remove('hidden');
+    pickPop.querySelector('.pp-title').textContent = info.isNew ? 'Select its indicators' : 'Edit its indicators';
+    $('pp-count').textContent = info.n === 1 ? '1 item selected' : info.n + ' items selected';
+    $('pp-ok').disabled = false;
+    // try beside, then below / above the factor; take the first spot that
+    // fits in the canvas and covers no other node
+    const pw = pickPop.offsetWidth, ph = pickPop.offsetHeight, gap = 14, m = 8;
+    const clampX = (v) => Math.max(m, Math.min(info.W - pw - m, v));
+    const clampY = (v) => Math.max(m, Math.min(info.H - ph - m, v));
+    const cands = [
+      [info.x + info.R + gap, info.y - ph / 2],
+      [info.x - info.R - gap - pw, info.y - ph / 2],
+      [info.x - pw / 2, info.y + info.R + gap],
+      [info.x - pw / 2, info.y - info.R - gap - ph],
+    ];
+    const r = info.side * 0.75;
+    const free = ([l, t]) => l >= m && t >= m && l + pw <= info.W - m && t + ph <= info.H - m &&
+      !info.avoid.some(([x, y]) => x > l - r && x < l + pw + r && y > t - r && y < t + ph + r);
+    let pos = cands.find(free);
+    if (!pos) pos = cands.find(([l, t]) => l >= m && l + pw <= info.W - m && t >= m && t + ph <= info.H - m) || cands[2];
+    pickPop.style.left = clampX(pos[0]) + 'px';
+    pickPop.style.top = clampY(pos[1]) + 'px';
+  }
+  $('pp-ok').addEventListener('click', () => { SFX('click'); editor.commitPick(); });
+  $('pp-cancel').addEventListener('click', () => { SFX('click'); editor.cancelPick(); });
+  $('pp-all').addEventListener('click', () => { SFX('click'); editor.pickAll(true); });
+  $('pp-none').addEventListener('click', () => { SFX('click'); editor.pickAll(false); });
 
   // ------------------------------------------------------------------
   // Dashboards: data (left) and the fitted model (right, after FIT)
@@ -237,44 +273,63 @@
   const sgn = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace(/^0/, '');
   const cls = (v) => (v >= 0 ? 'pos' : 'neg');
   function setReadout(html) { DD.readout.innerHTML = html; MD.readout.innerHTML = html; }
+  const touchOnly = global.matchMedia && global.matchMedia('(hover: none)').matches;
   function defaultReadout() {
-    return G.phase === 'results' ? 'Hover a cell, line or point: data vs. model values.' : 'Hover a cell, line or point to read its value.';
+    const verb = touchOnly ? 'Tap' : 'Hover';
+    return G.phase === 'results' ? `${verb} a cell, line or point to compare data and model.` : `${verb} a cell, line or point to see its value.`;
   }
-  function onPlotHover(kind, h) {
+
+  // tooltip at the pointer
+  const tip = $('tip');
+  function moveTip(ev) {
+    if (!ev || !isFinite(ev.clientX)) return;
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = ev.clientX + pad, y = ev.clientY + pad;
+    if (x + w > global.innerWidth - 6) x = ev.clientX - pad - w;
+    if (y + h > global.innerHeight - 6) y = ev.clientY - pad - h;
+    tip.style.left = Math.max(6, x) + 'px';
+    tip.style.top = Math.max(6, y) + 'px';
+  }
+  function showTip(html, ev) { tip.innerHTML = html; tip.classList.add('show'); moveTip(ev); }
+  function hideTip() { tip.classList.remove('show'); }
+  document.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && tip.classList.contains('show')) moveTip(e); });
+  const tipRow = (k, v, c) => `<div class="tt-r"><span>${k}</span><b class="${c || ''}">${v}</b></div>`;
+
+  function onPlotHover(kind, h, ev) {
     const c = G.cur;
     if (!c) return;
-    if (!h) { setReadout(defaultReadout()); highlight(null, 'plot'); return; }
+    if (!h) { hideTip(); highlight(null, 'plot'); return; }
     const m = G.phase === 'results' ? modelDash() : null;
     if (kind === 'scree') {
-      let s = `Eigenvalue ${h.k + 1}: data <b>${c.dash.ev[h.k].toFixed(2)}</b>`;
-      if (m) s += ` &middot; model <b>${m.ev[h.k].toFixed(2)}</b>`;
-      setReadout(s);
+      let s = `<div class="tt-h">Eigenvalue ${h.k + 1}</div>` + tipRow('data', c.dash.ev[h.k].toFixed(2));
+      if (m) s += tipRow('model', m.ev[h.k].toFixed(2));
+      showTip(s, ev);
       return;
     }
     const i = Math.min(h.i, h.j), j = Math.max(h.i, h.j);
-    const name = kind === 'pcor' ? 'partial r' : 'r';
+    const name = kind === 'pcor' ? 'Partial correlation' : 'Correlation';
     const D = kind === 'pcor' ? c.dash.P : c.dash.R;
     const v = D[i][j];
-    let s = `${name}(${i + 1}, ${j + 1}): data <b class="${cls(v)}">${f2(v)}</b>`;
+    let s = `<div class="tt-h">${name} ${i + 1}–${j + 1}</div>` + tipRow('data', f2(v), cls(v));
     if (m) {
       const M = kind === 'pcor' ? m.P : m.R;
-      s += ` &middot; model <b class="${cls(M[i][j])}">${f2(M[i][j])}</b> &middot; residual <b>${sgn(v - M[i][j])}</b>`;
+      s += tipRow('model', f2(M[i][j]), cls(M[i][j])) + tipRow('residual', sgn(v - M[i][j]), 'resid');
     }
-    setReadout(s);
+    showTip(s, ev);
     highlight([i, j], 'plot');
   }
 
   let hlState = null;
-  function highlight(idxs, source) {
+  function highlight(idxs, source, ev) {
     hlState = idxs && idxs.length ? idxs : null;
     applyHighlight(hlState);
     if (source !== 'canvas') editor.setHighlight(hlState || []);
     if (source === 'canvas') {
-      if (hlState) {
+      if (hlState && !editor.picking) {
         const i = hlState[0], R = G.cur.dash.R;
         const top = R[i].map((v, j) => [j, v]).filter(([j]) => j !== i).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3);
-        setReadout(`Item ${i + 1} &middot; strongest correlations: ` + top.map(([j, v]) => `${j + 1} <b class="${cls(v)}">${f2(v)}</b>`).join(', '));
-      } else setReadout(defaultReadout());
+        showTip(`<div class="tt-h">Item ${i + 1}: strongest correlations</div>` + top.map(([j, v]) => tipRow('with ' + (j + 1), f2(v), cls(v))).join(''), ev);
+      } else hideTip();
     }
   }
   function applyHighlight(idxs) {
@@ -307,6 +362,7 @@
 
   function setPhase(ph) {
     G.phase = ph;
+    hideTip();
     pane.dataset.phase = ph;
     document.body.classList.toggle('phase-results', ph === 'results');
     const label = fitBtn.querySelector('.fit-label');
@@ -413,6 +469,7 @@
     if (G.phase === 'results') { afterRound(); return; }
     SFX('click');
     const c = G.cur;
+    if (editor.picking) editor.commitPick();
     const { spec, key } = editor.getSpec();
     if (spec.m === 0 && !spec.residCovs.length) {
       SFX('error');
@@ -520,6 +577,8 @@
     seq.fast = true;
     while (seq.i < seq.steps.length) { const st = seq.steps[seq.i++]; st.fn(true); }
     seq.done = true;
+    const btns = $('card-btns');
+    if (btns && card.scrollHeight > card.clientHeight + 4) btns.scrollIntoView({ block: 'nearest' });
   }
 
   function gaugePos(ax, v) {
@@ -528,10 +587,30 @@
     else t = (v - ax.min) / (ax.max - ax.min);
     return Math.max(0, Math.min(1, isFinite(t) ? t : 0));
   }
-  function gaugeHTML(ax) {
-    const zones = ax.zones.map(([c, a, b]) => `<span class="g-zone ${c}" style="width:${((gaugePos(ax, b) - gaugePos(ax, a)) * 100).toFixed(2)}%"></span>`).join('');
-    const ticks = ax.ticks.map(([v, l], k) => `<span class="g-tick${k === 0 ? ' first' : k === ax.ticks.length - 1 ? ' last' : ''}" style="left:${(gaugePos(ax, v) * 100).toFixed(2)}%">${l}</span>`).join('');
-    return `<div class="gauge"><div class="g-track">${zones}</div>${ticks}<span class="g-mark"></span></div>`;
+  // Gauge for one criterion. Values beyond the axis land in a striped
+  // off-scale zone at that end, labelled "< min" or "> max".
+  const OFF = 0.1;
+  function gaugeGeom(ax, v) {
+    const lo = isFinite(v) && v < ax.min, hi = isFinite(v) && v > ax.max;
+    const s0 = lo ? OFF : 0, s1 = hi ? 1 - OFF : 1;
+    const P2 = (x) => s0 + (s1 - s0) * gaugePos(ax, x);
+    const pct = (f) => (f * 100).toFixed(2) + '%';
+    let zones = ax.zones.map(([c, a, b]) => `<span class="g-zone ${c}" style="width:${pct((s1 - s0) * (gaugePos(ax, b) - gaugePos(ax, a)))}"></span>`).join('');
+    if (lo) zones = `<span class="g-zone over" style="width:${pct(OFF)}"></span>` + zones;
+    if (hi) zones += `<span class="g-zone over" style="width:${pct(OFF)}"></span>`;
+    const nT = ax.ticks.length;
+    const ticks = ax.ticks.map(([x, l], k) => {
+      const first = k === 0, last = k === nT - 1;
+      if ((first && lo) || (last && hi)) return '';
+      return `<span class="g-tick${first ? ' first' : last ? ' last' : ''}" style="left:${pct(P2(x))}">${l}</span>`;
+    }).join('');
+    const off = lo ? `<span class="g-tick first off" style="left:0">&lt; ${ax.ticks[0][1]}</span>`
+      : hi ? `<span class="g-tick last off" style="left:100%">&gt; ${ax.ticks[nT - 1][1]}</span>` : '';
+    return {
+      off: lo || hi,
+      mark: lo ? OFF / 2 : hi ? 1 - OFF / 2 : P2(v),
+      html: `<div class="gauge${lo || hi ? ' offscale' : ''}"><div class="g-track">${zones}</div>${ticks}${off}<span class="g-mark"></span></div>`,
+    };
   }
   const ICON = { good: '✓', ok: '~', bad: '✕' };
 
@@ -558,6 +637,8 @@
 
   function showScoreCard(animate) {
     const c = G.cur, fit = c.fit, sc = fit.score, r = fit.res;
+    sc.rows.forEach(row => { row.g = gaugeGeom(row.cr.axis, row.v); });
+    hideTip();
     const nextLevelSeg = CONFIG.ROUNDS > 1 ? '' :
       `<div class="next-level"><span>Next:</span><div class="seg small" id="next-seg">${[1, 2, 3].map(l => `<button data-level="${l}" class="${l === G.level ? 'on' : ''}">${CONFIG.LEVELS[l].name}</button>`).join('')}</div></div>`;
     const nextLabel = CONFIG.ROUNDS > 1 ? (G.round + 1 >= CONFIG.ROUNDS ? 'Final score' : 'Next round ▸') : 'New dataset ▸';
@@ -573,9 +654,9 @@
         ${sc.rows.map((row, k) => `
           <div class="fit-row ${row.cls}" data-k="${k}">
             <div class="fr-name">${row.cr.name}<small>${row.cr.sub}</small></div>
-            <div class="fr-val">${row.cr.main(r)}${row.cr.small(r) ? `<small>${row.cr.small(r)}</small>` : ''}</div>
-            ${gaugeHTML(row.cr.axis)}
-            <div class="chip ${row.cls}">${ICON[row.cls]} ${row.label} <b>+${row.pts}</b></div>
+            <div class="fr-val">${row.cr.main(r)}${row.cr.small(r) ? `<small>${row.cr.small(r)}</small>` : ''}${row.g.off && row.cr.key !== 'chisq' ? '<small class="off-note">beyond the scale</small>' : ''}</div>
+            ${row.g.html}
+            <div class="chip ${row.cls}">${ICON[row.cls]} <span class="chip-label">${row.label}</span> <b>+${row.pts}</b></div>
           </div>`).join('')}
       </div>
       ${sc.saturated ? '<div class="card-note">Saturated model (df = 0): it reproduces any data perfectly, so the fit cannot be tested. No fit points.</div>' : ''}
@@ -605,7 +686,10 @@
     layer.classList.add('show');
     $('card-x').onclick = (e) => { e.stopPropagation(); SFX('click'); hideCard(); };
     $('btn-truth').onclick = (e) => { e.stopPropagation(); SFX('click'); openTruth(); };
-    $('btn-compare').onclick = (e) => { e.stopPropagation(); SFX('click'); hideCard(); if (!isWide()) setTab('model'); };
+    $('btn-compare').onclick = (e) => {
+      e.stopPropagation(); SFX('click'); hideCard(); if (!isWide()) setTab('model');
+      if (!G.scoreHint) { G.scoreHint = true; setTimeout(() => toast('Press SCORE (bottom right) to see your score again.'), 400); }
+    };
     $('btn-next').onclick = (e) => { e.stopPropagation(); afterRound(); };
     $('btn-rcode').onclick = (e) => { e.stopPropagation(); openRCode(fit.rcode); };
     document.querySelectorAll('#next-seg button').forEach(b => b.addEventListener('click', (e) => {
@@ -621,7 +705,7 @@
       const el = rowsEl[k];
       steps.push({ wait: k === 0 ? 300 : 220, fn: () => {
         el.classList.add('in');
-        requestAnimationFrame(() => { el.querySelector('.g-mark').style.left = (gaugePos(row.cr.axis, row.v) * 100).toFixed(2) + '%'; });
+        requestAnimationFrame(() => { el.querySelector('.g-mark').style.left = (row.g.mark * 100).toFixed(2) + '%'; });
       } });
       steps.push({ wait: 560, fn: (fast) => {
         el.classList.add('done');
@@ -766,7 +850,7 @@
   // Overlays, tabs, R code, level picker
   // ------------------------------------------------------------------
   function showOverlay(id) {
-    for (const o of ['screen-title', 'screen-final']) $(o).classList.toggle('show', o === id);
+    for (const o of ['screen-title', 'screen-level', 'screen-final']) $(o).classList.toggle('show', o === id);
   }
   function closeModal(id) { $(id).classList.remove('show'); }
   function isWide() { return !global.matchMedia('(max-width: 860px), (max-aspect-ratio: 4/5)').matches; }
@@ -782,24 +866,29 @@
     $('modal-r').classList.add('show');
   }
   function syncLevelSeg() {
-    document.querySelectorAll('#level-seg button').forEach(b => b.classList.toggle('on', +b.dataset.level === G.level));
-    $('level-blurb').textContent = CONFIG.LEVELS[G.level].blurb;
+    document.querySelectorAll('.level-card').forEach(b => b.classList.toggle('on', +b.dataset.level === G.level));
   }
 
   // ------------------------------------------------------------------
   // Wiring
   // ------------------------------------------------------------------
-  document.querySelectorAll('#level-seg button').forEach(b => b.addEventListener('click', () => {
-    SFX('click'); G.level = +b.dataset.level; syncLevelSeg();
-  }));
-  syncLevelSeg();
+  document.querySelectorAll('.lc-blurb').forEach(el => { el.textContent = CONFIG.LEVELS[+el.dataset.blurb].blurb; });
   $('btn-play').addEventListener('click', () => {
     SFX('click');
     global.GaltonAudio && global.GaltonAudio.ensure();
+    syncLevelSeg();
+    showOverlay('screen-level');
+    G.screen = 'level';
+  });
+  document.querySelectorAll('.level-card').forEach(b => b.addEventListener('click', () => {
+    SFX('click');
+    G.level = +b.dataset.level;
+    syncLevelSeg();
     if (!G.tutorialSeen) {
       FF.tutorial.show({ onDismiss: () => { G.tutorialSeen = true; startGame(); } });
     } else startGame();
-  });
+  }));
+  $('level-back').addEventListener('click', () => { SFX('click'); showOverlay('screen-title'); G.screen = 'title'; });
   $('btn-help').addEventListener('click', () => { SFX('click'); FF.tutorial.show({ popup: true }); });
   $('btn-home').addEventListener('click', () => {
     SFX('click');
@@ -871,6 +960,11 @@
     if (layer.classList.contains('show')) { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); skipSeq(); } return; }
     if (G.phase !== 'build') return;
     const k = e.key.toLowerCase();
+    if (editor.picking) {
+      if (k === 'enter') { e.preventDefault(); editor.commitPick(); }
+      else if (k === 'escape') editor.cancelPick();
+      return;
+    }
     if ((e.metaKey || e.ctrlKey) && k === 'z') { e.preventDefault(); editor.undo(); return; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (k === 'enter') { e.preventDefault(); onFitButton(); return; }

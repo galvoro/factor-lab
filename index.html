@@ -54,7 +54,7 @@
         <figure class="panel" data-p="net"><figcaption>Correlation network</figcaption><svg class="plot"></svg></figure>
         <figure class="panel" data-p="pcor"><figcaption>Partial correlation network</figcaption><svg class="plot"></svg></figure>
       </div>
-      <div class="readout">Hover a cell, line or point to read its value.</div>
+      <div class="readout">Hover a cell, line or point to see its value.</div>
     </section>
 
     <!-- ==================== MODEL PANE ==================== -->
@@ -87,13 +87,17 @@
           <button data-rview="resid" role="tab">Residuals</button>
           <button data-rview="diagram" role="tab"><span class="long">Path diagram</span><span class="short">Diagram</span></button>
         </div>
-        <button id="btn-score" class="score-chip" title="Show the fit results again">Score <b id="score-chip-val">0</b></button>
       </div>
       <div class="canvas-wrap">
         <svg id="canvas" data-tool="select"></svg>
         <div id="canvas-hint">
-          <b>Double-click</b> the canvas to add a factor. Select items first<br>
-          (click them) to give it loadings to those items.
+          <b>Double-click</b> the canvas to add a factor,<br>then click the items it measures.
+        </div>
+        <div id="pick-pop" class="pick-pop hidden" role="dialog" aria-label="Indicators of this factor">
+          <div class="pp-title">Select its indicators</div>
+          <div class="pp-text">Click the items this factor measures.</div>
+          <div class="pp-row"><span id="pp-count">0 items</span><span class="pp-links"><button class="link-btn" id="pp-all">All</button> &middot; <button class="link-btn" id="pp-none">None</button></span></div>
+          <div class="pp-btns"><button class="pill-btn ghost" id="pp-cancel">Cancel</button><button class="pill-btn" id="pp-ok">OK</button></div>
         </div>
         <div id="toast" role="status" aria-live="polite"></div>
       </div>
@@ -104,10 +108,11 @@
           <figure class="panel" data-p="net"><figcaption>Model-implied network</figcaption><svg class="plot"></svg></figure>
           <figure class="panel" data-p="pcor"><figcaption>Model-implied partial correlations</figcaption><svg class="plot"></svg></figure>
         </div>
-        <div class="readout">Hover a cell, line or point: data vs. model values.</div>
+        <div class="readout">Hover a cell, line or point to compare data and model.</div>
       </div>
       <div class="canvas-foot">
         <div id="model-info" class="model-info"></div>
+        <button id="btn-score" class="score-btn" title="Show the fit results again">SCORE <b id="score-chip-val">0</b></button>
         <button id="btn-fit" class="fit-btn"><span class="fit-label">FIT</span></button>
       </div>
     </section>
@@ -155,19 +160,48 @@
         <rect x="404" y="142" width="28" height="28"/><rect x="436" y="142" width="28" height="28"/><rect x="468" y="142" width="28" height="28"/>
       </g>
     </svg>
-    <div class="level-pick">
-      <div class="seg" id="level-seg" role="radiogroup" aria-label="Level">
-        <button data-level="1" class="on" role="radio">Easy</button>
-        <button data-level="2" role="radio">Medium</button>
-        <button data-level="3" role="radio">Hard</button>
-      </div>
-      <div id="level-blurb" class="level-blurb"></div>
-    </div>
     <div class="title-buttons">
       <button id="btn-play" class="title-btn play">PLAY</button>
       <button id="btn-learn" class="title-btn learn" disabled title="LEARN mode is coming soon">LEARN<small>coming soon</small></button>
     </div>
     <div class="title-credits">a Galvoro Capsule &middot; Sacha Epskamp<span>Claude (code)</span></div>
+  </div>
+</div>
+
+<!-- ==================== LEVEL ==================== -->
+<div id="screen-level" class="overlay">
+  <div class="level-wrap">
+    <h2 class="level-header">CHOOSE A LEVEL</h2>
+    <div class="level-cards">
+      <button class="level-card" data-level="1">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <line x1="60" y1="21" x2="16" y2="52"/><line x1="60" y1="21" x2="45" y2="52"/><line x1="60" y1="21" x2="75" y2="52"/><line x1="60" y1="21" x2="104" y2="52"/>
+          <circle cx="60" cy="14" r="10"/><rect x="8" y="52" width="16" height="16"/><rect x="37" y="52" width="16" height="16"/><rect x="67" y="52" width="16" height="16"/><rect x="96" y="52" width="16" height="16"/>
+        </svg>
+        <span class="lc-name">Easy</span><span class="lc-blurb" data-blurb="1"></span>
+      </button>
+      <button class="level-card" data-level="2">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M33 8 Q60 -4 87 8" fill="none"/>
+          <line x1="33" y1="21" x2="14" y2="52"/><line x1="33" y1="21" x2="38" y2="52"/><line x1="33" y1="21" x2="62" y2="52"/>
+          <line x1="87" y1="21" x2="62" y2="52" class="twist"/><line x1="87" y1="21" x2="86" y2="52"/><line x1="87" y1="21" x2="108" y2="52"/>
+          <circle cx="33" cy="14" r="10"/><circle cx="87" cy="14" r="10"/>
+          <rect x="6" y="52" width="16" height="16"/><rect x="30" y="52" width="16" height="16"/><rect x="54" y="52" width="16" height="16"/><rect x="78" y="52" width="16" height="16"/><rect x="100" y="52" width="16" height="16"/>
+        </svg>
+        <span class="lc-name">Medium</span><span class="lc-blurb" data-blurb="2"></span>
+      </button>
+      <button class="level-card" data-level="3">
+        <svg viewBox="0 0 120 70" aria-hidden="true">
+          <line x1="20" y1="21" x2="10" y2="52"/><line x1="20" y1="21" x2="30" y2="52"/><line x1="60" y1="21" x2="50" y2="52"/><line x1="60" y1="21" x2="70" y2="52"/>
+          <line x1="100" y1="21" x2="90" y2="52"/><line x1="100" y1="21" x2="110" y2="52"/><line x1="60" y1="21" x2="30" y2="52" class="twist"/>
+          <path d="M70 69 Q80 80 90 69" fill="none" class="twist"/>
+          <circle cx="20" cy="14" r="9"/><circle cx="60" cy="14" r="9"/><circle cx="100" cy="14" r="9"/>
+          <rect x="3" y="52" width="14" height="14"/><rect x="23" y="52" width="14" height="14"/><rect x="43" y="52" width="14" height="14"/><rect x="63" y="52" width="14" height="14"/><rect x="83" y="52" width="14" height="14"/><rect x="103" y="52" width="14" height="14"/>
+        </svg>
+        <span class="lc-name">Hard</span><span class="lc-blurb" data-blurb="3"></span>
+      </button>
+    </div>
+    <button id="level-back" class="link-btn level-back">&#9666; Back</button>
   </div>
 </div>
 
@@ -230,6 +264,8 @@
     </div>
   </div>
 </div>
+
+<div id="tip" class="tip" role="tooltip"></div>
 
 <script src="linalg.js"></script>
 <script src="sem.js"></script>

@@ -17,7 +17,7 @@ LEARN mode is not built yet (button shows "coming soon").
 | `sem.js` | ML estimation (Fisher scoring, std.lv identification), fit indices, identification check, lavaan export |
 | `bank.js` | 48 structure templates (levels 1–3), random parameter draws (`RANGES`), data simulation, plain-language description and structure comparison |
 | `plots.js` | qgraph-style scree / heatmap / networks; `springLayout` is a port of qgraph's Fruchterman–Reingold |
-| `editor.js` | SVG path-diagram editor (residual correlations are drawn between the items' hidden residuals) |
+| `editor.js` | SVG path-diagram editor: double-click adds a factor and opens the indicator picker (double-click a factor to edit its items); residual correlations are drawn between the items' hidden residuals |
 | `game.js` | game flow, dashboards, fit card, scoring (`CONFIG` / `CRITERIA` at the top), true-model reveal |
 | `tutorial.js`, `audio.js` | briefing cards; `GaltonAudio` SFX (+ optional `assets/bgm.mp3`) |
 

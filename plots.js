@@ -154,7 +154,7 @@
       }, gE);
       line.dataset.i = i; line.dataset.j = j; line.dataset.v = v;
       if (opts.onHover) {
-        line.addEventListener('pointerenter', () => opts.onHover({ i, j, v }));
+        line.addEventListener('pointerenter', (e) => opts.onHover({ i, j, v }, e));
         line.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') opts.onHover(null); });
       }
     }
@@ -204,7 +204,7 @@
       }, g);
       rect.dataset.i = i; rect.dataset.j = j;
       if (!diag && opts.onHover) {
-        rect.addEventListener('pointerenter', () => opts.onHover({ i, j, v }));
+        rect.addEventListener('pointerenter', (e) => opts.onHover({ i, j, v }, e));
         rect.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') opts.onHover(null); });
       }
       if (showVals && !diag) {
@@ -270,7 +270,7 @@
       s.values.forEach((v, k) => {
         const c = el('circle', { cx: X(k), cy: Y(v), r: s.r || 4, fill: s.fill || '#FFFFFF', stroke: s.color, 'stroke-width': 2 }, g);
         if (opts.onHover) {
-          c.addEventListener('pointerenter', () => opts.onHover({ k, v, label: s.label }));
+          c.addEventListener('pointerenter', (e) => opts.onHover({ k, v, label: s.label }, e));
           c.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') opts.onHover(null); });
         }
       });
