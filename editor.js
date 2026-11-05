@@ -487,6 +487,10 @@
         if (l.label) {
           const t = el('text', { x, y, 'font-size': d.R * 0.72, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-label lat-label' }, g);
           t.textContent = l.label;
+        } else if (!isStatic) {
+          // subtle F1, F2, ... matching the console's lavaan syntax
+          const t = el('text', { x, y, 'font-size': Math.max(9, d.R * 0.42), 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'lat-idx' }, g);
+          t.textContent = 'F' + (S.lat.indexOf(l) + 1);
         }
       }
       for (const o of S.obs) {

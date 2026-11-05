@@ -129,30 +129,146 @@
   function onModelChanged() {
     if (!G.cur) return;
     if (G.mode === 'learn') learnUpdate(true);
+    else updateConsole(true);
     updateModelInfo();
     updateFactorButton();
     $('canvas-hint').classList.toggle('gone', editor.counts.factors > 0 || editor.counts.edges > 0);
   }
 
+  // ---- status bar (bottom): what the "program" is doing ----
+  function setStatus(label, cls, info, right) {
+    const st = $('status');
+    st.className = 'status' + (cls ? ' ' + cls : '');
+    $('st-label').textContent = label;
+    $('st-info').innerHTML = info || '';
+    $('st-right').textContent = right || '';
+  }
   function updateModelInfo() {
     const c = G.cur;
-    if (G.phase === 'results' && c && c.fit) {
-      const r = c.fit.res;
-      $('model-info').innerHTML = `ML fit &middot; N = ${c.N} &middot; χ²(${r.df}) = ${r.chisq.toFixed(1)} &middot; BIC ${r.bic.toFixed(1)}`;
-      return;
-    }
+    if (!c) return;
     const { spec } = editor.getSpec();
     const npar = FF.sem.buildParams(spec).length;
     const df = spec.p * (spec.p + 1) / 2 - npar;
     const fac = spec.m === 1 ? '1 factor' : spec.m + ' factors';
     if (G.mode === 'learn') {
-      $('model-info').innerHTML = `${spec.p} items &middot; ${fac} &middot; ${npar} parameters`;
+      const ok = !c.ev || (c.ev.ok && c.ev.pd);
+      setStatus(ok ? 'learn' : 'impossible values', ok ? 'idle' : 'error',
+        `<b>${spec.p} items</b> · ${fac} · ${npar} parameters │ model-implied correlations`, 'population values');
       return;
     }
-    let s = `${fac} &middot; ${npar} parameters &middot; <span class="${df < 0 ? 'warn' : ''}">df ${df}</span>`;
-    if (spec.m === 0 && !spec.residCovs.length) s += ' &middot; <span class="muted">baseline model (no factors)</span>';
-    $('model-info').innerHTML = s;
+    const ds = `<b>Dataset ${G.round + 1}/${CONFIG.ROUNDS}</b> · ${CONFIG.LEVELS[G.level].name} · N = ${c.N} · ${c.p} items`;
+    if (G.phase === 'results' && c.fit) {
+      const r = c.fit.res;
+      setStatus('converged', '', `${ds} │ ${r.iterations} iterations · χ²(${r.df}) = ${r.chisq.toFixed(1)}, p ${fmtP(r.pvalue)} · RMSEA ${f3(r.rmsea)} · BIC ${r.bic.toFixed(1)}`, 'ML · std.lv');
+      return;
+    }
+    let m = `${fac} · ${npar} parameters · df ${df}`;
+    if (spec.m === 0 && !spec.residCovs.length) m = 'baseline model (no factors) · df ' + df;
+    setStatus('ready', '', `${ds} │ ${m}`, 'ML · std.lv');
   }
+
+  // ---- console: the model as lavaan syntax, typed as you draw ----
+  const conBody = $('con-body');
+  let conLines = [];               // [{ text, cls }]
+  let typing = null;
+  function playSyntax() {
+    const { spec } = editor.getSpec();
+    const lines = FF.sem.lavaanSyntax(spec).split('\n').filter(l => l && !/^(y\d+) ~~ \1$/.test(l));
+    return lines.length ? lines.map(t => ({ text: t })) : [{ text: '# no factors yet: the baseline model (items uncorrelated)', cls: 'cmt' }];
+  }
+  function learnSyntax() {
+    const { spec, theta } = editor.getSpec();
+    const params = FF.sem.buildParams(spec);
+    const v = (x) => String(+x.toFixed(2));
+    const F = (j) => 'F' + (j + 1), Y = (i) => 'y' + (i + 1);
+    const out = [{ text: '# population model; factor variances fixed to 1', cls: 'cmt' }];
+    for (let j = 0; j < spec.m; j++) {
+      const t = params.map((q, k) => (q.mat === 'L' && q.c === j ? v(theta[k]) + '*' + Y(q.r) : null)).filter(Boolean);
+      if (t.length) out.push({ text: `${F(j)} =~ ${t.join(' + ')}` });
+    }
+    params.forEach((q, k) => {
+      if (q.mat === 'B') out.push({ text: `${F(q.r)} ~ ${v(theta[k])}*${F(q.c)}` });
+      else if (q.mat === 'P') out.push({ text: `${F(q.c)} ~~ ${v(theta[k])}*${F(q.r)}` });
+      else if (q.mat === 'T' && q.r !== q.c) out.push({ text: `${Y(q.c)} ~~ ${v(theta[k])}*${Y(q.r)}` });
+      else if (q.mat === 'T' && Math.abs(theta[k] - 1) > 1e-9) out.push({ text: `${Y(q.r)} ~~ ${v(theta[k])}*${Y(q.r)}` });
+    });
+    if (out.length === 1) out.push({ text: '# no factors: all items uncorrelated', cls: 'cmt' });
+    return out;
+  }
+  function renderConsole(fresh) {
+    conBody.innerHTML = '';
+    for (const L of conLines) {
+      const d = document.createElement('div');
+      d.className = 'con-line' + (L.cls ? ' ' + L.cls : '') + (fresh && fresh.has(L) ? ' new' : '');
+      d.textContent = L.shown === undefined ? L.text : L.text.slice(0, L.shown);
+      if (L.shown !== undefined && L.shown < L.text.length) { const caret = document.createElement('span'); caret.className = 'con-caret'; d.appendChild(caret); }
+      conBody.appendChild(d);
+    }
+  }
+  // replace the console with `lines`; new / changed lines are typed out
+  function setConsole(lines, animate) {
+    const before = new Set(conLines.filter(l => !l.extra).map(l => l.text));
+    const fresh = new Set();
+    conLines = lines.map(l => {
+      const L = Object.assign({}, l);
+      if (!before.has(L.text)) { fresh.add(L); if (animate) L.shown = 0; }
+      return L;
+    });
+    typeOut(fresh);
+  }
+  function appendConsole(line, animate) {
+    const L = Object.assign({ extra: true }, line);
+    if (animate) L.shown = 0;
+    conLines.push(L);
+    typeOut(new Set([L]));
+  }
+  function typeOut(fresh) {
+    if (typing) cancelAnimationFrame(typing);
+    const firstNew = conLines.findIndex(l => fresh.has(l));
+    const step = () => {
+      const L = conLines.find(l => l.shown !== undefined && l.shown < l.text.length);
+      if (L) L.shown = Math.min(L.text.length, L.shown + 3);
+      renderConsole(fresh);
+      const target = conBody.children[firstNew >= 0 ? firstNew : conLines.length - 1];
+      if (target) target.scrollIntoView({ block: 'nearest' });
+      if (L) typing = requestAnimationFrame(step);
+      else { typing = null; conLines.forEach(l => { delete l.shown; }); setTimeout(() => renderConsole(null), 1400); }
+    };
+    typing = requestAnimationFrame(step);
+  }
+  function updateConsole(animate) {
+    if (!G.cur) return;
+    setConsole(G.mode === 'learn' ? learnSyntax() : playSyntax(), animate);
+    $('con-sub').textContent = G.mode === 'learn' ? 'population model (lavaan syntax)' : 'lavaan model syntax';
+  }
+  $('con-toggle').addEventListener('click', () => {
+    const c = $('console');
+    c.classList.toggle('collapsed');
+    $('con-toggle').innerHTML = c.classList.contains('collapsed') ? '+' : '&#8211;';
+    requestAnimationFrame(renderAll);
+  });
+
+  // ---- light / dark / auto ----
+  const THEMES = ['auto', 'light', 'dark'];
+  const THEME_ICON = {
+    auto: '<svg viewBox="0 0 24 24" class="th-icon"><circle cx="12" cy="12" r="7.5" fill="none"/><path class="th-half" d="M12 4.5 A7.5 7.5 0 0 1 12 19.5 Z"/></svg>',
+    light: '<svg viewBox="0 0 24 24" class="th-icon"><circle cx="12" cy="12" r="4.2" fill="none"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" fill="none"/></svg>',
+    dark: '<svg viewBox="0 0 24 24" class="th-icon"><path class="th-half" d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg>',
+  };
+  let theme = 'auto';
+  try { const s = global.localStorage.getItem('factorfind-theme'); if (THEMES.includes(s)) theme = s; } catch (e) { /* storage unavailable */ }
+  function applyTheme(t) {
+    theme = t;
+    document.documentElement.dataset.theme = t;
+    $('btn-theme').innerHTML = THEME_ICON[t];
+    $('btn-theme').title = 'Theme: ' + t + ' (click to change)';
+    try { global.localStorage.setItem('factorfind-theme', t); } catch (e) { /* ignore */ }
+  }
+  applyTheme(theme);
+  $('btn-theme').addEventListener('click', () => {
+    applyTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
+    toast('Theme: ' + theme + (theme === 'auto' ? ' (follows your system)' : ''));
+  });
 
   function updateFactorButton() {
     const n = editor.selection().items.length;
@@ -481,6 +597,8 @@
     editor.setFitResult(ev.ok ? { est: ev.est } : null);
     renderData();
     refreshParam();
+    updateConsole(!!relayout);
+    updateModelInfo();
     if (target) glideLayout(target);
   }
 
@@ -729,6 +847,7 @@
     setPhase('build');
     G.cur = null;
     generating = true;
+    setStatus('simulating…', 'busy', `<b>Dataset ${G.round + 1}/${CONFIG.ROUNDS}</b> · ${CONFIG.LEVELS[G.level].name} · N = ${N}`, 'ML · std.lv');
     fitBtn.disabled = true;
     $('dash-note').textContent = `Simulating ${N} respondents…`;
     for (const k2 of ['scree', 'heat', 'net', 'pcor']) P.clear(DD.svg(k2));
@@ -755,6 +874,7 @@
       setTab('data');
       updateModelInfo();
       updateFactorButton();
+      updateConsole(false);
       requestAnimationFrame(renderAll);
     }, 30);
   }
@@ -801,6 +921,8 @@
     busy = true;
     fitBtn.classList.add('busy');
     canvasWrap.classList.add('estimating');
+    setStatus('estimating…', 'busy', `<b>Dataset ${G.round + 1}/${CONFIG.ROUNDS}</b> · maximum likelihood`, 'ML · std.lv');
+    appendConsole({ text: `> fit <- cfa(model, sample.cov = S, sample.nobs = ${c.N}, std.lv = TRUE)`, cls: 'cmd' }, true);
     SFX('fit');
     const res = FF.sem.fit(spec, c.data.S, c.N, { facLabel: () => 'One of your factors' });
     setTimeout(() => {
@@ -883,6 +1005,8 @@
       </div>`;
     layer.classList.add('show');
     SFX('error');
+    setStatus('error', 'error', what.replace(/\.$/, ''), 'ML · std.lv');
+    appendConsole({ text: '# ' + (kind === 'ident' ? 'error: model not identified' : kind === 'conv' ? 'error: no convergence' : 'warning: improper solution (Heywood case)'), cls: 'err' }, true);
     $('err-back').onclick = () => { SFX('click'); hideCard(); };
   }
 

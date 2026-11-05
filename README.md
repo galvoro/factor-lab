@@ -33,6 +33,16 @@ non-positive-definite matrix grey the panels out with a warning. Metric: factor
 | `diploma.js` | draws the diploma on a canvas for "Save as image" (Print uses the page itself, print CSS) |
 | `tutorial.js`, `audio.js` | briefing cards; `GaltonAudio` SFX (+ optional `assets/bgm.mp3`) |
 
+## Look
+
+"Analysis workstation" frame: panes as windows, a status bar (what the program
+is doing: simulating / ready / estimating / converged / error, plus model and
+fit summary) and, on wider screens, a collapsible console that writes the drawn
+model as lavaan syntax (LEARN: population syntax with values). Factors carry
+subtle F1, F2 labels matching the console. Light / dark / auto theme (HUD button,
+remembered in localStorage); plots, the canvas and the true-model diagram stay
+on white in every theme (`.panel, .canvas-wrap, .truth-fig` reset the tokens).
+
 ## Datasets
 
 `FF.bank.makeRound(template, N, seed)` draws parameters (primary loadings

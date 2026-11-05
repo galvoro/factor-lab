@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="auto">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -31,6 +31,9 @@
     </div>
     <div class="hud-btns">
       <button id="btn-help" class="icon-btn" aria-label="How to play" title="How to play">?</button>
+      <button id="btn-theme" class="icon-btn" aria-label="Theme" title="Theme: auto">
+        <svg viewBox="0 0 24 24" class="th-icon"><circle cx="12" cy="12" r="7.5" fill="none"/><path class="th-half" d="M12 4.5 A7.5 7.5 0 0 1 12 19.5 Z"/></svg>
+      </button>
       <button id="btn-mute" class="icon-btn" aria-label="Mute" title="Sound on/off">&#9834;</button>
       <button id="btn-home" class="icon-btn" aria-label="Quit to title" title="Quit to title">&#10005;</button>
     </div>
@@ -123,6 +126,10 @@
         </div>
         <div class="readout">Hover a cell, line or point to compare data and model.</div>
       </div>
+      <div id="console" class="console" aria-label="Model syntax">
+        <div class="con-head"><span class="con-tab">Console</span><span class="con-sub" id="con-sub">lavaan model syntax</span><button id="con-toggle" class="con-toggle" title="Hide / show the console" aria-label="Hide or show the console">&#8211;</button></div>
+        <div id="con-body" class="con-body" role="log" aria-live="off"></div>
+      </div>
       <div class="canvas-foot">
         <div id="model-info" class="model-info"></div>
         <div class="seg small learn-only" id="label-seg" role="radiogroup" aria-label="Path labels">
@@ -139,6 +146,13 @@
       <div id="card" class="card"></div>
     </div>
   </main>
+
+  <!-- status bar -->
+  <footer id="status" class="status">
+    <span id="st-state" class="st-state"><span class="st-dot"></span><span id="st-label">ready</span></span>
+    <span id="st-info" class="st-info"></span>
+    <span id="st-right" class="st-right"></span>
+  </footer>
 </div>
 
 <!-- ==================== TITLE ==================== -->
