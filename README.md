@@ -23,6 +23,7 @@ LEARN mode is not built yet (button shows "coming soon").
 | `plots.js` | qgraph-style scree / heatmap / networks; `springLayout` is a port of qgraph's Fruchterman–Reingold |
 | `editor.js` | SVG path-diagram editor: double-click adds a factor and opens the indicator picker (double-click a factor to edit its items); residual correlations are drawn between the items' hidden residuals |
 | `game.js` | game flow, dashboards, fit card, scoring (`CONFIG` / `CRITERIA` at the top), true-model reveal |
+| `diploma.js` | draws the diploma on a canvas for "Save as image" (Print uses the page itself, print CSS) |
 | `tutorial.js`, `audio.js` | briefing cards; `GaltonAudio` SFX (+ optional `assets/bgm.mp3`) |
 
 ## Datasets
@@ -51,6 +52,10 @@ So the true structure always scores 100, and nothing in it is undetectable.
   least 60 / 100 (`CONFIG.DIPLOMA`): no stars at 60, one at 70, two at 80,
   three at 90. Below 60 a "No diploma this time" sheet with a NOT AWARDED stamp. `CONFIG.LEVELS` sets each level's medal and the sample
   sizes drawn (Psychometrika: N = 300–1000).
+* Diploma: "Save as image" draws a PNG, tries a download (works standalone)
+  and always shows the image so it can be saved with right-click / long-press
+  (works inside the Galvoro iframe, whose sandbox blocks downloads). "Print"
+  is hidden when embedded (no `allow-modals`, so `print()` would be ignored).
 * An empty canvas fits the baseline (independence) model after a confirming
   second press of FIT.
 

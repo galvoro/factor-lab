@@ -959,6 +959,12 @@
     $('final-table').innerHTML = `<tr><th>#</th><th>True model</th><th>N</th><th>Fit</th><th>Parsimony</th><th>Points</th></tr>${rows}`;
     $('dip-date').textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     $('btn-again').textContent = passed ? 'PLAY AGAIN' : 'TRY AGAIN';
+    $('final-extra').classList.toggle('hidden', !passed);
+    G.final = passed ? {
+      name: '', level: lv.name, metal: METALS[lv.medal], score: fmtPts(total), max, stars: nStars,
+      rank: rankFor(total / CONFIG.ROUNDS, false), date: $('dip-date').textContent,
+      rounds: G.rounds.map((r, k) => ({ k: k + 1, name: r.tpl.name, N: r.N, fit: r.fitPts, pars: fmtPts(r.bicPts), total: fmtPts(r.total), exact: r.exact })),
+    } : null;
     hideCard(true);
     closeModal('modal-truth');
     showOverlay('screen-final');
@@ -1028,6 +1034,38 @@
   });
   $('btn-again').addEventListener('click', () => { SFX('click'); startGame(); });
   $('btn-final-home').addEventListener('click', () => { SFX('click'); G.screen = 'title'; showOverlay('screen-title'); });
+  // ---- diploma: save as image (works everywhere, also inside the Galvoro
+  // iframe via right-click / long-press) and print (only outside an iframe:
+  // the platform sandbox has no allow-modals, so print() would be ignored)
+  const embedded = (() => { try { return global.self !== global.top; } catch (e) { return true; } })();
+  if (embedded) $('btn-print').classList.add('hidden');
+  let saveURL = null;
+  function triggerDownload() {
+    if (!saveURL) return;
+    const a = document.createElement('a');
+    a.href = saveURL; a.download = 'factor-find-diploma.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  $('btn-save-img').addEventListener('click', () => {
+    if (!G.final) return;
+    SFX('click');
+    const btn = $('btn-save-img');
+    btn.disabled = true; btn.textContent = 'Drawing…';
+    FF.diploma.render(Object.assign({}, G.final, { name: $('dip-name').value })).then(cv => new Promise(res => cv.toBlob(res, 'image/png'))).then(blob => {
+      if (saveURL) URL.revokeObjectURL(saveURL);
+      saveURL = URL.createObjectURL(blob);
+      $('save-img').src = saveURL;
+      $('save-note').innerHTML = embedded
+        ? 'Right-click the image (or press and hold it on a phone) and choose <b>Save image</b>. You can print the saved image.'
+        : 'If the download does not start, right-click the image (or press and hold it on a phone) and choose <b>Save image</b>.';
+      $('modal-save').classList.add('show');
+      if (!embedded) triggerDownload();
+    }).catch(() => toast('Could not draw the image.', 'warn')).finally(() => { btn.disabled = false; btn.textContent = 'Save as image'; });
+  });
+  $('save-dl').addEventListener('click', () => { SFX('click'); triggerDownload(); });
+  $('save-close').addEventListener('click', () => closeModal('modal-save'));
+  $('modal-save').addEventListener('click', (e) => { if (e.target.id === 'modal-save') closeModal('modal-save'); });
+  $('btn-print').addEventListener('click', () => { SFX('click'); global.print(); });
   $('btn-other-level').addEventListener('click', () => { SFX('click'); syncLevelSeg(); showOverlay('screen-level'); G.screen = 'level'; });
   $('r-close').addEventListener('click', () => closeModal('modal-r'));
   $('truth-close').addEventListener('click', () => { SFX('click'); closeModal('modal-truth'); });

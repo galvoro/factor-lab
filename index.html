@@ -260,6 +260,10 @@
       <button id="btn-other-level" class="title-btn ghost">OTHER LEVEL</button>
       <button id="btn-final-home" class="title-btn ghost">TITLE</button>
     </div>
+    <div class="final-extra" id="final-extra">
+      <button id="btn-save-img" class="pill-btn ghost">Save as image</button>
+      <button id="btn-print" class="pill-btn ghost">Print</button>
+    </div>
   </div>
 </div>
 
@@ -274,6 +278,16 @@
       </div>
       <div id="truth-text" class="truth-text"></div>
     </div>
+  </div>
+</div>
+
+<!-- ==================== DIPLOMA AS IMAGE ==================== -->
+<div id="modal-save" class="overlay modal">
+  <div class="modal-card wide">
+    <div class="modal-head"><span>Your diploma as an image</span><button id="save-close" class="icon-btn" aria-label="Close">&#10005;</button></div>
+    <p class="modal-note" id="save-note">If the download does not start, right-click the image (or press and hold it on a phone) and choose <b>Save image</b>.</p>
+    <img id="save-img" class="save-img" alt="Your FACTOR FIND diploma">
+    <div class="modal-foot"><button id="save-dl" class="pill-btn">Download PNG</button></div>
   </div>
 </div>
 
@@ -308,6 +322,7 @@
 <script src="plots.js"></script>
 <script src="editor.js"></script>
 <script src="tutorial.js"></script>
+<script src="diploma.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
