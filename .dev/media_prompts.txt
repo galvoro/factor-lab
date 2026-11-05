@@ -1,0 +1,117 @@
+FACTOR LAB — prompts for generated media
+==========================================
+
+The app's look, for reference: an "analysis workstation" frame (dark slate / light
+grey), one amber accent (#E39B2D), and qgraph colours for data (blue #0000D5 for
+positive, red #BF0000 for negative). Path diagrams use white circles for latent
+factors and white squares for measured items, without Greek letters. The current
+key art (cover.png) is a glowing round-bottom flask in which two factors rise as
+bubbles above six correlated items; the image prompts below use the same idea so
+the results are directly comparable.
+
+
+------------------------------------------------------------------------------
+1. BACKGROUND MUSIC  (Gemini / Lyria)          -> save as assets/bgm.mp3
+------------------------------------------------------------------------------
+
+Instrumental background music loop for an educational web game about structural
+equation modeling and factor analysis, used in graduate courses and workshops. The
+player studies correlation plots and draws statistical models, so the music must
+support focused thinking and never compete for attention.
+
+Mood: calm, curious, quietly optimistic, a little playful, like late-evening work
+in a cosy research lab with computers humming. Not sleepy, not dramatic.
+Style: minimal modern electronica with a light lo-fi warmth. Soft analog synth
+pads, a gentle plucked or mallet arpeggio (marimba / kalimba-like), a round
+warm bass, sparse brushed or muted electronic percussion, and a few very quiet
+"computer" blips and soft bubbly sounds as texture (a nod to a laboratory and
+a running analysis).
+Tempo: about 84 BPM, steady. Key: a warm major or Dorian mode, consistent
+throughout.
+Structure: one even groove with small variations; no intro build-up, no drops,
+no big climaxes, no fade-out. It must loop seamlessly: same energy and
+instrumentation at the start and at the end. Length 60-90 seconds.
+Mix: soft and mellow, low-mid focused, no harsh highs or sharp transients; it
+will play quietly underneath short sound effects.
+No vocals, no lyrics, no spoken words.
+
+
+------------------------------------------------------------------------------
+2. SQUARE TILE / COVER  (ChatGPT Image, 1:1, 1024 x 1024)  -> cover.png
+------------------------------------------------------------------------------
+
+Square cover illustration for an educational web app called "Factor Lab", about
+factor analysis and structural equation modeling.
+
+Title: at the top, "FACTOR LAB" in large, clean, bold geometric sans-serif capitals
+(the word "LAB" in warm amber, "FACTOR" in off-white), with a small letter-spaced
+line "STRUCTURAL EQUATION MODELING" above it. Spell every word exactly like this.
+
+Main subject: a glowing round-bottom laboratory flask resting on a cork ring on a
+dark lab bench, centred in the lower two-thirds. The flask is lit from inside, so
+the glass reads as a bright white figure against the dark background. The lower
+half holds a pale cream liquid. Six small white squares float in the liquid in
+two groups of three, each group joined by bold royal-blue lines. Above the liquid
+surface, two larger white spheres (the hidden "latent factors") rise like bubbles.
+Each sphere has three bold royal-blue arrows pointing down into its three squares.
+A curved, softly blue double-headed arrow arches between the two spheres. A few
+tiny bubbles rise up the neck of the flask and out of the top.
+
+Setting: a quiet research lab at night. Deep slate-navy background with a faint
+graph-paper / screen grid, a softly out-of-focus computer monitor in the far
+background showing a blue-and-red correlation heatmap and a network graph, and a
+warm amber glow around the flask.
+
+Style: polished, modern digital illustration, semi-realistic glass with soft
+lighting and depth, clean shapes, crisp diagram lines. Grown-up and elegant
+rather than cartoonish, suitable for graduate-level teaching. Palette: deep slate
+and navy, white glass, cream liquid, saturated royal blue (#0000D5) for the
+diagram, a touch of muted red, amber (#E39B2D) accents.
+
+Avoid: any other text, numbers or formulas, Greek letters, extra arrows or
+labels, people, logos, watermarks, borders. Keep the title and the flask inside
+the central 85% of the image so nothing important touches the edges.
+
+
+------------------------------------------------------------------------------
+3. OPENING PAGE IMAGE  (ChatGPT Image, landscape 3:2, 1536 x 1024)
+   -> shown large on the title screen, with the PLAY / LEARN buttons below it
+------------------------------------------------------------------------------
+
+Wide hero illustration for the title screen of an educational web app called
+"Factor Lab", about factor analysis and structural equation modeling.
+
+Title: "FACTOR LAB" in large, clean, bold geometric sans-serif capitals, centred
+in the upper part of the image ("LAB" in warm amber, "FACTOR" in off-white). Spell
+it exactly like this. No other text.
+
+Scene: a cinematic, wide view of a calm research workstation at night. In the
+centre stands a glowing round-bottom laboratory flask on a cork ring, lit from
+inside so the glass shines white against the dark room. In its pale cream liquid
+float six small white squares in two groups of three, each group joined by bold
+royal-blue lines. Above the liquid, two larger white spheres (hidden "latent
+factors") rise like bubbles, each with three bold royal-blue arrows pointing down
+into its squares, and a curved double-headed arrow arching between the two spheres.
+Small bubbles drift up and out of the flask's neck. On the left and right, slightly
+out of focus: a computer monitor showing a blue-and-red correlation heatmap and a
+network graph of connected circles; a notebook with a sketched path diagram (circles
+with arrows to squares); warm amber desk light; faint grid lines in the dark slate
+background, like graph paper or a screen.
+
+Style: polished, modern digital illustration with soft volumetric light and gentle
+depth of field, semi-realistic glass, crisp diagram lines. Elegant and calm,
+playful in its idea but not cartoonish; suitable for graduate courses and
+workshops. Palette: deep slate and navy, white glass, cream, saturated royal blue
+(#0000D5) diagram lines, a little muted red, amber (#E39B2D) highlights.
+
+Composition: the flask and title are the clear focus. Keep the bottom 12% of the
+image quiet and dark (the buttons sit just below it), and keep important elements
+away from the left and right edges, since the image may be cropped slightly on
+narrow screens. It is shown with rounded corners, in both light and dark page
+themes.
+
+Avoid: other text or numbers, legible code or formulas, Greek letters, people,
+logos, watermarks, busy clutter.
+
+(Optional phone variant: the same prompt at 2:3 portrait, 1024 x 1536, with the
+title at the top and the flask in the middle.)
