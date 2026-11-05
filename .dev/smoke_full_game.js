@@ -1,6 +1,6 @@
 // Smoke test: plays one five-round Easy game in headless Chrome with real
 // mouse input and checks the diploma. Serve the capsule first:
-//   python3 -m http.server 8765   (in factor-find/)   then
+//   python3 -m http.server 8765   (in factor-lab/)   then
 //   node .dev/smoke_full_game.js [baseURL]
 //   round 1: the truth, first factor via the indicator picker      -> 100
 //   round 2: an unidentified model first (error card, not counted), then one factor for all items
