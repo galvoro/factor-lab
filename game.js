@@ -289,32 +289,90 @@
   // Indicator picker (after adding a factor, or double-clicking one)
   // ------------------------------------------------------------------
   const pickPop = $('pick-pop');
+  // The popup must never sit on the items (they are what you click), so the
+  // whole canvas is searched for a spot that covers none, as close to the
+  // factor as possible. Short canvases (small laptop windows, phones on their
+  // side) get a slimmer popup; and it can always be dragged out of the way.
+  const PICK_LAYOUTS = ['', 'compact', 'bar'];
+  const pickDrag = { fid: null, moved: false };
+  function pickSpot(info, pw, ph) {
+    const m = 8, gap = 14, pad = 6, W = info.W, H = info.H;
+    const hi = info.half + pad, rf = info.R + pad;
+    const maxL = Math.max(m, W - pw - m), maxT = Math.max(m, H - ph - m);
+    const xs = [], ys = [];
+    for (let v = m; v < maxL; v += 8) xs.push(v);
+    for (let v = m; v < maxT; v += 8) ys.push(v);
+    xs.push(maxL); ys.push(maxT);
+    // the classic spots: right of, left of, below and above the factor
+    const pref = [[info.x + info.R + gap, info.y - ph / 2], [info.x - info.R - gap - pw, info.y - ph / 2],
+      [info.x - pw / 2, info.y + info.R + gap], [info.x - pw / 2, info.y - info.R - gap - ph]]
+      .map(([l, t]) => [Math.max(m, Math.min(maxL, l)), Math.max(m, Math.min(maxT, t))]);
+    const hitsCircle = (l, t, [x, y], r) => {
+      const dx = x - Math.max(l, Math.min(l + pw, x)), dy = y - Math.max(t, Math.min(t + ph, y));
+      return dx * dx + dy * dy < r * r;
+    };
+    const score = (l, t) => {
+      const covered = info.items.filter(([x, y]) => x + hi > l && x - hi < l + pw && y + hi > t && y - hi < t + ph).length;
+      let cost = covered * 1e5;
+      if (hitsCircle(l, t, [info.x, info.y], info.R + gap - 2)) cost += 2000;   // hides the factor being edited
+      cost += 800 * info.factors.filter(f => hitsCircle(l, t, f, rf)).length;
+      const nx = Math.max(l, Math.min(l + pw, info.x)), ny = Math.max(t, Math.min(t + ph, info.y));
+      cost += Math.hypot(info.x - nx, info.y - ny) + 0.1 * Math.hypot(info.x - l - pw / 2, info.y - t - ph / 2);
+      if (pw > W - 2 * m || ph > H - 2 * m) cost += 5e4;                        // does not even fit
+      return { l, t, covered, cost };
+    };
+    let best = null;
+    pref.forEach(([l, t], k) => { const s = score(l, t); s.cost -= 4 - k; if (!best || s.cost < best.cost) best = s; });
+    for (const t of ys) for (const l of xs) { const s = score(l, t); if (s.cost < best.cost) best = s; }
+    return best;
+  }
   function placePicker(info) {
-    if (!info) { pickPop.classList.add('hidden'); return; }
+    if (!info) { pickPop.classList.add('hidden'); pickDrag.fid = null; return; }
     hideTip();
     pickPop.classList.remove('hidden');
     pickPop.querySelector('.pp-title').textContent = info.isNew ? 'Select its indicators' : 'Edit its indicators';
     $('pp-count').textContent = info.n === 1 ? '1 item selected' : info.n + ' items selected';
     $('pp-ok').disabled = false;
-    // try beside, then below / above the factor; take the first spot that
-    // fits in the canvas and covers no other node
-    const pw = pickPop.offsetWidth, ph = pickPop.offsetHeight, gap = 14, m = 8;
-    const clampX = (v) => Math.max(m, Math.min(info.W - pw - m, v));
-    const clampY = (v) => Math.max(m, Math.min(info.H - ph - m, v));
-    const cands = [
-      [info.x + info.R + gap, info.y - ph / 2],
-      [info.x - info.R - gap - pw, info.y - ph / 2],
-      [info.x - pw / 2, info.y + info.R + gap],
-      [info.x - pw / 2, info.y - info.R - gap - ph],
-    ];
-    const r = info.side * 0.75;
-    const free = ([l, t]) => l >= m && t >= m && l + pw <= info.W - m && t + ph <= info.H - m &&
-      !info.avoid.some(([x, y]) => x > l - r && x < l + pw + r && y > t - r && y < t + ph + r);
-    let pos = cands.find(free);
-    if (!pos) pos = cands.find(([l, t]) => l >= m && l + pw <= info.W - m && t >= m && t + ph <= info.H - m) || cands[2];
-    pickPop.style.left = clampX(pos[0]) + 'px';
-    pickPop.style.top = clampY(pos[1]) + 'px';
+    if (pickDrag.fid !== info.fid) { pickDrag.fid = info.fid; pickDrag.moved = false; }
+    if (pickDrag.moved) { clampPicker(); return; }                              // the user put it somewhere
+    let best = null;
+    for (const lay of PICK_LAYOUTS) {
+      pickPop.className = 'pick-pop' + (lay ? ' ' + lay : '');
+      const s = pickSpot(info, pickPop.offsetWidth, pickPop.offsetHeight);
+      if (!best || s.cost < best.cost - 1e4) best = Object.assign(s, { lay });
+      if (!s.covered && s.cost < 5e4) break;
+    }
+    pickPop.className = 'pick-pop' + (best.lay ? ' ' + best.lay : '');
+    pickPop.style.left = best.l + 'px';
+    pickPop.style.top = best.t + 'px';
   }
+  function clampPicker() {
+    const wrap = pickPop.parentElement, m = 4;
+    const l = Math.max(m, Math.min(wrap.clientWidth - pickPop.offsetWidth - m, pickPop.offsetLeft));
+    const t = Math.max(m, Math.min(wrap.clientHeight - pickPop.offsetHeight - m, pickPop.offsetTop));
+    pickPop.style.left = l + 'px'; pickPop.style.top = t + 'px';
+  }
+  // drag the popup by anything that is not a button
+  pickPop.addEventListener('pointerdown', (ev) => {
+    if (ev.button > 0 || ev.target.closest('button')) return;
+    ev.preventDefault();
+    const x0 = ev.clientX - pickPop.offsetLeft, y0 = ev.clientY - pickPop.offsetTop;
+    pickPop.setPointerCapture(ev.pointerId);
+    pickPop.classList.add('dragging');
+    const move = (e) => {
+      pickPop.style.left = (e.clientX - x0) + 'px'; pickPop.style.top = (e.clientY - y0) + 'px';
+      clampPicker(); pickDrag.moved = true;
+    };
+    const up = () => {
+      pickPop.classList.remove('dragging');
+      pickPop.removeEventListener('pointermove', move);
+      pickPop.removeEventListener('pointerup', up);
+      pickPop.removeEventListener('pointercancel', up);
+    };
+    pickPop.addEventListener('pointermove', move);
+    pickPop.addEventListener('pointerup', up);
+    pickPop.addEventListener('pointercancel', up);
+  });
   $('pp-ok').addEventListener('click', () => { SFX('click'); editor.commitPick(); });
   $('pp-cancel').addEventListener('click', () => { SFX('click'); editor.cancelPick(); });
   $('pp-all').addEventListener('click', () => { SFX('click'); editor.pickAll(true); });

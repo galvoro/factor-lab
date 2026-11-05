@@ -743,6 +743,19 @@ body.phase-results #canvas-pane .seg { background: var(--res-seg-bg); border-col
 .pp-row #pp-count { font-family: var(--f-mono); font-weight: 600; color: var(--amber-ink); }
 .pp-btns { display: flex; gap: 6px; }
 .pp-btns .pill-btn { padding: 7px 10px; font-size: 13px; }
+/* it can be dragged by anything but its buttons */
+.pick-pop { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.pick-pop.dragging { cursor: grabbing; }
+.pick-pop button { cursor: pointer; }
+.pp-title::after { content: ''; float: right; width: 14px; height: 10px; margin-top: 4px; opacity: .45;
+  background: radial-gradient(circle, var(--ink-2) 1.3px, transparent 1.6px) 0 0 / 5px 5px; }
+/* short canvases: drop the explanation, or go down to a single row */
+.pick-pop.compact .pp-text { display: none; }
+.pick-pop.compact .pp-title { margin-bottom: 4px; }
+.pick-pop.bar { width: auto; display: flex; align-items: center; gap: 12px; padding: 5px 6px 5px 12px; border-radius: 10px; }
+.pick-pop.bar .pp-title, .pick-pop.bar .pp-text { display: none; }
+.pick-pop.bar .pp-row { margin: 0; gap: 10px; white-space: nowrap; }
+.pick-pop.bar .pp-btns .pill-btn { padding: 4px 10px; font-size: 12.5px; }
 
 /* level screen */
 .level-wrap { width: min(1040px, 100%); margin: auto; text-align: center; }

@@ -193,8 +193,10 @@
       const l = node(pick.fid);
       if (!l) return null;
       const [x, y] = px(l);
-      const avoid = S.lat.filter(o => o.id !== pick.fid).map(o => px(o)).concat(S.obs.map(o => px(o)));
-      return { fid: pick.fid, n: pick.items.size, isNew: pick.isNew, x, y, R: dims().R, W, H, avoid, side: dims().side };
+      const d = dims();
+      // items must stay clickable; other factors are better left visible too
+      return { fid: pick.fid, n: pick.items.size, isNew: pick.isNew, x, y, R: d.R, half: d.half, W, H,
+        items: S.obs.map(o => px(o)), factors: S.lat.filter(o => o.id !== pick.fid).map(o => px(o)) };
     }
     function notifyPick() { if (opts.onPick) opts.onPick(pick ? pickInfo() : null); }
     function startPick(fid, isNew) {
