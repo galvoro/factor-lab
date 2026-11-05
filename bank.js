@@ -297,13 +297,14 @@
   // ------------------------------------------------------------------
   const LETTERS = 'ABCDEFGHI';
   const NOTES = {
-    rev: 'A <b>reverse-keyed</b> item loads negatively: agreeing with it means a lower factor score, so it correlates negatively with the other items.',
-    cross: 'A <b>cross-loading</b> item measures two factors at once, so it correlates with both groups of items.',
-    resid: 'A <b>residual correlation</b> means two items share something beyond their factor, such as similar wording (a method effect).',
-    neg: '<b>Negatively correlated factors</b> produce a block of negative correlations between their items.',
-    orth: '<b>Uncorrelated factors</b> split the correlation matrix into separate blocks. Drawing a factor correlation there adds a parameter the data do not need.',
-    short: 'A factor with only <b>two items</b> is identified only through its correlations with the other factors.',
+    rev: '<b>Reverse-keyed</b> items load negatively.',
+    cross: 'A <b>cross-loading</b> item measures two factors.',
+    resid: 'A <b>residual correlation</b>: two items share something beyond their factor, such as similar wording.',
+    neg: '<b>Negatively correlated factors</b> give a block of negative correlations.',
+    orth: '<b>Uncorrelated factors</b> give separate blocks; a factor correlation is an unneeded parameter.',
+    short: 'A <b>two-item factor</b> is identified only through its correlations with other factors.',
   };
+
   const f2 = (v) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace(/^0/, '');
   const list = (xs) => xs.length <= 1 ? String(xs[0]) : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
 

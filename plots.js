@@ -124,7 +124,7 @@
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     const side = Math.min(w, h);
     const cx = w / 2, cy = h / 2;
-    // qgraph: vsize = 8*exp(-n/80)+1 (percent of the plot width, as a radius)
+    // qgraph: vsize = 8*exp(-n/80)+1 (percent of the plot width); r = half the node width
     const vsize = 8 * Math.exp(-n / 80) + 1;
     const r = side * vsize / 200;
     const half = side / 2 - r - side * 0.06;
@@ -147,8 +147,9 @@
       const [x1, y1] = P[i], [x2, y2] = P[j];
       const dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
       const ux = dx / L, uy = dy / L;
+      const k = r / Math.max(Math.abs(ux), Math.abs(uy), 1e-9);   // square node boundary
       const line = el('line', {
-        x1: x1 + ux * r, y1: y1 + uy * r, x2: x2 - ux * r, y2: y2 - uy * r,
+        x1: x1 + ux * k, y1: y1 + uy * k, x2: x2 - ux * k, y2: y2 - uy * k,
         stroke: weightColor(v, maximum), 'stroke-width': width.toFixed(2),
         'stroke-linecap': 'butt', class: 'net-edge',
       }, gE);
@@ -162,7 +163,8 @@
     const fs = Math.max(8, r * 0.72);
     P.forEach(([x, y], i) => {
       const g = el('g', { class: 'net-node' + (opts.highlight && opts.highlight.has(i) ? ' hl' : '') }, gN);
-      el('circle', { cx: x, cy: y, r, fill: '#FFFFFF', stroke: '#000000', 'stroke-width': Math.max(0.75, side / 600) }, g);
+      // square nodes, like the items in the path diagram
+      el('rect', { x: x - r, y: y - r, width: 2 * r, height: 2 * r, fill: '#FFFFFF', stroke: '#000000', 'stroke-width': Math.max(0.75, side / 600), class: 'net-shape' }, g);
       const t = el('text', { x, y, 'font-size': fs, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'net-label' }, g);
       t.textContent = opts.labels ? opts.labels[i] : String(i + 1);
     });
@@ -188,9 +190,9 @@
     const lab = el('g', { class: 'hm-labels' }, svg);
     const lfs = Math.max(9, Math.min(14, cell * 0.42));
     for (let i = 0; i < n; i++) {
-      const tl = el('text', { x: ox + (i + 0.5) * cell, y: oy - 5, 'font-size': lfs, 'text-anchor': 'middle' }, lab);
+      const tl = el('text', { x: ox + (i + 0.5) * cell, y: oy - 5, 'font-size': lfs, 'text-anchor': 'middle', 'data-k': i }, lab);
       tl.textContent = opts.labels ? opts.labels[i] : String(i + 1);
-      const tr = el('text', { x: ox - 5, y: oy + (i + 0.5) * cell, 'font-size': lfs, 'text-anchor': 'end', 'dominant-baseline': 'central' }, lab);
+      const tr = el('text', { x: ox - 5, y: oy + (i + 0.5) * cell, 'font-size': lfs, 'text-anchor': 'end', 'dominant-baseline': 'central', 'data-k': i }, lab);
       tr.textContent = opts.labels ? opts.labels[i] : String(i + 1);
     }
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
@@ -212,7 +214,7 @@
         const t = el('text', {
           x: x + cell / 2, y: y + cell / 2, 'font-size': Math.min(13, cell * 0.34),
           'text-anchor': 'middle', 'dominant-baseline': 'central',
-          fill: a > 0.55 ? '#FFFFFF' : '#2B2F36', class: 'hm-val',
+          fill: a > 0.55 ? '#FFFFFF' : '#2B2F36', class: 'hm-val', 'data-i': i, 'data-j': j,
         }, g);
         t.textContent = fmt2(v);
       }

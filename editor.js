@@ -874,6 +874,7 @@
       get counts() { return { factors: S.lat.length, edges: S.edges.length }; },
       get edges() { return S.edges.map(x => Object.assign({}, x)); },
       get picking() { return !!pick; },
+      get pickItems() { return pick ? [...pick.items].map(id => +id.slice(1)) : null; },
       startPick, commitPick, cancelPick, pickAll,
       cancelPending() { pending = null; render(); },
     };

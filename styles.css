@@ -196,11 +196,21 @@ button { font-family: inherit; color: inherit; }
 .scree-legend text { fill: var(--ink-2); font-family: var(--f-body); }
 .hm-labels text { fill: var(--ink-2); font-family: var(--f-mono); }
 .hm-val { font-family: var(--f-mono); pointer-events: none; }
-.hm-cell { transition: stroke 0.1s; }
-.hm-cell.hl { stroke: var(--amber); stroke-width: 2.5; }
-.hm-cell.hl-soft { stroke: var(--amber); stroke-width: 1; stroke-opacity: 0.6; }
+.hm-cell, .hm-val { transition: opacity 0.15s; }
+/* highlighted items: their rows and columns stay, the rest fades */
+.has-hl .hm-cell, .has-hl .hm-val { opacity: 0.18; }
+.has-hl .hm-cell.hl-line, .has-hl .hm-val.hl-line { opacity: 1; }
+.has-hl .hm-cell.hl-line { stroke: var(--amber); stroke-width: 1.5; }
+.has-hl .hm-cell.hl-both { stroke: var(--amber-deep); stroke-width: 2.6; }
+.hm-cell.hl { stroke: var(--ink) !important; stroke-width: 3 !important; opacity: 1 !important; }
+.hm-labels text.hl { fill: var(--amber-deep); font-weight: 700; }
 .net-label { fill: #000; font-family: Arial, Helvetica, sans-serif; pointer-events: none; }
-.net-node.hl circle { stroke: var(--amber); stroke-width: 3; }
+.net-node.hl .net-shape { stroke: var(--amber-deep); stroke-width: 3; fill: var(--amber-soft); }
+.net-node.hl-pair .net-shape { stroke: var(--ink); stroke-width: 3; }
+.net-edge { transition: opacity 0.15s; }
+.has-hl .net-edge { opacity: 0.1; }
+.has-hl .net-edge.e-touch { opacity: 0.35; }
+.has-hl .net-edge.e-in, .net-edge.e-pair { opacity: 1; }
 .net-edge { cursor: crosshair; }
 .plot-empty { fill: var(--muted); font-family: var(--f-body); }
 
@@ -267,8 +277,6 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
 .canvas-wrap {
   position: relative; flex: 1; min-height: 0;
   background: var(--card);
-  background-image: radial-gradient(circle, #E4DFD3 1px, transparent 1.2px);
-  background-size: 22px 22px;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
@@ -597,7 +605,7 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
    True model modal
    ============================================================ */
 .truth-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px; margin-top: 10px; }
-.truth-fig { position: relative; background: #fff; background-image: radial-gradient(circle, #E4DFD3 1px, transparent 1.2px); background-size: 22px 22px; border: 1px solid var(--line); border-radius: 12px; min-height: 360px; }
+.truth-fig { position: relative; background: #fff; border: 1px solid var(--line); border-radius: 12px; min-height: 360px; }
 #truth-canvas { position: absolute; inset: 0 0 22px 0; width: 100%; height: calc(100% - 22px); }
 .truth-cap { position: absolute; left: 0; right: 0; bottom: 5px; text-align: center; font-size: 11px; color: var(--muted); }
 .truth-text { font-size: 13px; line-height: 1.5; color: var(--ink-2); }

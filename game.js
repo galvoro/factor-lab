@@ -118,6 +118,7 @@
     },
     onHoverNode: (idx, ev) => highlight(idx === null ? null : [idx], 'canvas', ev),
     onPick: (info) => placePicker(info),
+    onRender: () => syncSelectionHL(),
   });
   const truthView = FF.editor.create($('truth-canvas'), { static: true });
 
@@ -214,7 +215,7 @@
     P.heatmap(DD.svg('heat'), d.R, { maximum: 1, onHover: hover('cor') });
     P.network(DD.svg('net'), d.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
     P.network(DD.svg('pcor'), d.P, d.layout, { maximum: d.maxP, onHover: hover('pcor') });
-    if (hlState) applyHighlight(hlState);
+    applyHighlight(hlSet(), HL.pair);
   }
 
   function renderModel() {
@@ -243,7 +244,7 @@
       MD.cap('pcor', 'Residual partial network', sc(RP));
       P.network(MD.svg('pcor'), subM(d.P, m.P), d.layout, { maximum: RP, onHover: hover('pcor') });
     }
-    if (hlState) applyHighlight(hlState);
+    applyHighlight(hlSet(), HL.pair);
   }
 
   function renderAll() {
@@ -319,27 +320,72 @@
     highlight([i, j], 'plot');
   }
 
-  let hlState = null;
+  // ---- cross-highlighting between the canvas and the dashboards ----
+  // sel   : items selected on the canvas (or being picked for a factor)
+  // hover : item under the pointer on the canvas
+  // pair  : the two items of a hovered heatmap cell / network edge
+  const HL = { sel: [], hover: null, pair: null, key: '' };
+  function hlSet() {
+    const s = new Set(HL.sel);
+    if (HL.hover !== null) s.add(HL.hover);
+    return s;
+  }
+  function refreshHL() {
+    applyHighlight(hlSet(), HL.pair);
+    editor.setHighlight(HL.pair || []);
+  }
   function highlight(idxs, source, ev) {
-    hlState = idxs && idxs.length ? idxs : null;
-    applyHighlight(hlState);
-    if (source !== 'canvas') editor.setHighlight(hlState || []);
     if (source === 'canvas') {
-      if (hlState && !editor.picking) {
-        const i = hlState[0], R = G.cur.dash.R;
+      HL.hover = idxs && idxs.length ? idxs[0] : null;
+      if (HL.hover !== null && !editor.picking) {
+        const i = HL.hover, R = G.cur.dash.R;
         const top = R[i].map((v, j) => [j, v]).filter(([j]) => j !== i).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3);
         showTip(`<div class="tt-h">Item ${i + 1}: strongest correlations</div>` + top.map(([j, v]) => tipRow('with ' + (j + 1), f2(v), cls(v))).join(''), ev);
       } else hideTip();
-    }
+    } else HL.pair = idxs && idxs.length ? idxs : null;
+    refreshHL();
   }
-  function applyHighlight(idxs) {
-    const set = new Set(idxs || []);
+  // called after every editor render: follow the canvas selection
+  function syncSelectionHL() {
+    const pickIdx = editor.pickItems;
+    const sel = pickIdx || editor.selection().items.map(id => +id.slice(1));
+    const key = sel.slice().sort((a, b) => a - b).join(',');
+    if (key === HL.key) return;
+    HL.key = key; HL.sel = sel;
+    refreshHL();
+  }
+  function applyHighlight(set, pair) {
+    const any = set.size > 0;
+    const inPair = (k) => !!pair && (pair[0] === k || pair[1] === k);
     for (const D of [DD, MD]) {
-      for (const k of ['net', 'pcor']) D.svg(k).querySelectorAll('.net-node').forEach((g, n) => g.classList.toggle('hl', set.has(n)));
-      D.svg('heat').querySelectorAll('.hm-cell').forEach(r => {
+      for (const k of ['net', 'pcor']) {
+        const svg = D.svg(k);
+        svg.classList.toggle('has-hl', any);
+        svg.querySelectorAll('.net-node').forEach((g2, n) => {
+          g2.classList.toggle('hl', set.has(n));
+          g2.classList.toggle('hl-pair', inPair(n));
+        });
+        svg.querySelectorAll('.net-edge').forEach(l => {
+          const i = +l.dataset.i, j = +l.dataset.j;
+          const c = (set.has(i) ? 1 : 0) + (set.has(j) ? 1 : 0);
+          // within the highlighted group: full; touching it: half; else dimmed
+          l.classList.toggle('e-in', c === 2 || (c === 1 && set.size === 1));
+          l.classList.toggle('e-touch', c === 1 && set.size > 1);
+          l.classList.toggle('e-pair', !!pair && ((pair[0] === i && pair[1] === j) || (pair[0] === j && pair[1] === i)));
+        });
+      }
+      const heat = D.svg('heat');
+      heat.classList.toggle('has-hl', any);
+      heat.querySelectorAll('.hm-cell, .hm-val').forEach(r => {
         const i = +r.dataset.i, j = +r.dataset.j;
-        r.classList.toggle('hl', set.size === 2 && set.has(i) && set.has(j) && i !== j);
-        r.classList.toggle('hl-soft', set.size === 1 && (set.has(i) || set.has(j)));
+        const ri = set.has(i), cj = set.has(j);
+        r.classList.toggle('hl-line', ri || cj);
+        r.classList.toggle('hl-both', ri && cj && i !== j);
+        r.classList.toggle('hl', !!pair && i !== j && ((pair[0] === i && pair[1] === j) || (pair[0] === j && pair[1] === i)));
+      });
+      heat.querySelectorAll('.hm-labels text').forEach(t => {
+        const k = +t.dataset.k;
+        t.classList.toggle('hl', set.has(k) || inPair(k));
       });
     }
   }
@@ -410,6 +456,7 @@
 
     hideCard(true);
     closeModal('modal-truth');
+    Object.assign(HL, { sel: [], hover: null, pair: null, key: '' });
     setPhase('build');
     G.cur = null;
     generating = true;
@@ -528,15 +575,15 @@
     let what, why;
     if (kind === 'ident') {
       what = 'The model is not identified.';
-      why = 'Its parameters cannot all be estimated from the correlations:<ul>' +
+      why = '<ul>' +
         [...new Set(res.reasons || [])].map(r => `<li>${r}</li>`).join('') + '</ul>';
     } else if (kind === 'conv') {
       what = 'The estimation did not converge.';
-      why = 'An estimate keeps running off towards infinity, so there is no maximum-likelihood solution. This often happens when a factor has too few items or when two factors measure the same thing. Try a simpler structure.';
+      why = 'An estimate runs off towards infinity. Often a factor has too few items, or two factors measure the same thing.';
     } else {
       what = 'Improper solution (a Heywood case).';
       why = '<ul>' + improperText(res).map(t => `<li>${t}</li>`).join('') + '</ul>' +
-        'This usually means the model is misspecified around these items.';
+        'The model is probably misspecified around these items.';
     }
     card.className = 'card error shake';
     card.innerHTML = `
@@ -544,7 +591,7 @@
       <div class="err-body">
         <div class="err-what">${what}</div>
         <div class="err-why">${why}</div>
-        <div class="err-free">This attempt does not count. Fix the model and press FIT again.</div>
+        <div class="err-free">This attempt does not count.</div>
         <button class="pill-btn" id="err-back">Back to my model</button>
       </div>`;
     layer.classList.add('show');
