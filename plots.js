@@ -191,40 +191,49 @@
   // ------------------------------------------------------------------
   // Heatmap: blue positive / red negative, intensity |r| / maximum.
   // ------------------------------------------------------------------
+  // opts: { maximum, values, labels, onHover,
+  //         order: display order of the items (array of indices),
+  //         onReorder(newOrder): makes the row / column labels draggable;
+  //         dragging a label moves that item's row and column together }
   function heatmap(svg, M, opts) {
     opts = opts || {};
     clear(svg);
     const { w, h } = size(svg);
     svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
     const n = M.length;
+    const order = opts.order && opts.order.length === n ? opts.order : [...Array(n).keys()];
     const maximum = opts.maximum || 1;
     const padL = Math.max(14, Math.min(w, h) * 0.07), padT = padL;
     const avail = Math.min(w - padL - 6, h - padT - 6);
     const cell = avail / n;
     const ox = padL + (w - padL - 6 - avail) / 2, oy = padT + (h - padT - 6 - avail) / 2;
     const showVals = cell >= 26 && opts.values !== false;
+    const drag = svg._hmDrag || null;                 // item being dragged (survives re-renders)
     const g = el('g', {}, svg);
     const lab = el('g', { class: 'hm-labels' }, svg);
     const lfs = Math.max(9, Math.min(14, cell * 0.42));
-    for (let i = 0; i < n; i++) {
-      const tl = el('text', { x: ox + (i + 0.5) * cell, y: oy - 5, 'font-size': lfs, 'text-anchor': 'middle', 'data-k': i }, lab);
-      tl.textContent = opts.labels ? opts.labels[i] : String(i + 1);
-      const tr = el('text', { x: ox - 5, y: oy + (i + 0.5) * cell, 'font-size': lfs, 'text-anchor': 'end', 'dominant-baseline': 'central', 'data-k': i }, lab);
-      tr.textContent = opts.labels ? opts.labels[i] : String(i + 1);
+    const name = (it) => (opts.labels ? opts.labels[it] : String(it + 1));
+    for (let r = 0; r < n; r++) {
+      const it = order[r], dc = drag && drag.k === it ? ' dragging' : '';
+      const tl = el('text', { x: ox + (r + 0.5) * cell, y: oy - 5, 'font-size': lfs, 'text-anchor': 'middle', 'data-k': it, class: dc.trim() }, lab);
+      tl.textContent = name(it);
+      const tr = el('text', { x: ox - 5, y: oy + (r + 0.5) * cell, 'font-size': lfs, 'text-anchor': 'end', 'dominant-baseline': 'central', 'data-k': it, class: dc.trim() }, lab);
+      tr.textContent = name(it);
     }
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-      const x = ox + j * cell, y = oy + i * cell;
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const i = order[r], j = order[c];
+      const x = ox + c * cell, y = oy + r * cell;
       const diag = i === j;
       const v = M[i][j];
       const rect = el('rect', {
         x: x + 0.5, y: y + 0.5, width: cell - 1, height: cell - 1, rx: Math.min(3, cell * 0.08),
         fill: diag ? '#EEEDE8' : weightColor(Math.max(-maximum, Math.min(maximum, v)), maximum),
-        class: 'hm-cell' + (diag ? ' diag' : ''),
+        class: 'hm-cell' + (diag ? ' diag' : '') + (drag && (drag.k === i || drag.k === j) ? ' hm-drag-line' : ''),
       }, g);
       rect.dataset.i = i; rect.dataset.j = j;
       if (!diag && opts.onHover) {
-        rect.addEventListener('pointerenter', (e) => opts.onHover({ i, j, v }, e));
-        rect.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') opts.onHover(null); });
+        rect.addEventListener('pointerenter', (e) => { if (!svg._hmDrag) opts.onHover({ i, j, v }, e); });
+        rect.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !svg._hmDrag) opts.onHover(null); });
       }
       if (showVals && !diag) {
         const a = Math.abs(v) / maximum;
@@ -236,6 +245,71 @@
         t.textContent = fmt2(v);
       }
     }
+    svg._hm = { opts, order, ox, oy, cell, n, padL, band: lfs + 9 };
+    svg.classList.toggle('hm-reorderable', !!opts.onReorder);
+    placeStrips(svg);
+  }
+
+  // Row / column numbers are dragged through two invisible HTML strips laid
+  // over them (HTML so that touch-action: none works on phones, and they
+  // survive re-renders so the pointer stays captured). Dragging moves the
+  // item to the slot under the pointer, live.
+  function placeStrips(svg) {
+    const st = svg._hm, host = svg.parentNode;
+    if (!host) return;
+    if (!svg._hmStrips) {
+      svg._hmStrips = ['x', 'y'].map(axis => {
+        const d = document.createElement('div');
+        d.className = 'hm-strip ' + axis;
+        d.title = 'Drag a number to move that item';
+        host.appendChild(d);
+        bindStrip(svg, d, axis);
+        return d;
+      });
+    }
+    const [sx, sy] = svg._hmStrips;
+    const on = !!st.opts.onReorder;
+    sx.hidden = sy.hidden = !on;
+    if (!on) return;
+    const r = svg.getBoundingClientRect(), hr = host.getBoundingClientRect();
+    const L = r.left - hr.left, T = r.top - hr.top;
+    Object.assign(sx.style, { left: L + st.ox + 'px', top: T + st.oy - st.band + 'px', width: st.cell * st.n + 'px', height: st.band + 'px' });
+    Object.assign(sy.style, { left: L + st.ox - st.padL + 'px', top: T + st.oy + 'px', width: st.padL + 'px', height: st.cell * st.n + 'px' });
+  }
+  function bindStrip(svg, strip, axis) {
+    const slotAt = (e) => {
+      const st = svg._hm, r = svg.getBoundingClientRect();
+      const pos = axis === 'x' ? e.clientX - r.left - st.ox : e.clientY - r.top - st.oy;
+      return Math.max(0, Math.min(st.n - 1, Math.floor(pos / st.cell)));
+    };
+    strip.addEventListener('pointerdown', (e) => {
+      const st = svg._hm;
+      if (!st || !st.opts.onReorder) return;
+      e.preventDefault(); e.stopPropagation();
+      try { strip.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      svg._hmDrag = { k: st.order[slotAt(e)], id: e.pointerId };
+      svg.classList.add('hm-dragging');
+      if (st.opts.onHover) st.opts.onHover(null);
+      st.opts.onReorder(st.order.slice(), true);         // re-render with the drag highlight
+    });
+    strip.addEventListener('pointermove', (e) => {
+      const st = svg._hm, d = svg._hmDrag;
+      if (!st || !d || e.pointerId !== d.id) return;
+      const slot = slotAt(e), cur = st.order.indexOf(d.k);
+      if (slot === cur) return;
+      const o = st.order.slice();
+      o.splice(cur, 1); o.splice(slot, 0, d.k);
+      st.opts.onReorder(o, true);
+    });
+    const end = (e) => {
+      const st = svg._hm, d = svg._hmDrag;
+      if (!d || e.pointerId !== d.id) return;
+      svg._hmDrag = null;
+      svg.classList.remove('hm-dragging');
+      if (st) st.opts.onReorder(st.order.slice(), false);
+    };
+    strip.addEventListener('pointerup', end);
+    strip.addEventListener('pointercancel', end);
   }
 
   // ------------------------------------------------------------------

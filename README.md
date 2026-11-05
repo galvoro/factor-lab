@@ -33,6 +33,14 @@ non-positive-definite matrix grey the panels out with a warning. Metric: factor
 | `diploma.js` | draws the diploma on a canvas for "Save as image" (Print uses the page itself, print CSS) |
 | `tutorial.js`, `audio.js` | briefing cards; `GaltonAudio` SFX (+ optional `assets/bgm.mp3`) |
 
+## Heatmap order
+
+Dragging a row or column number of any heatmap moves that item's row and column
+together (live), to bring out the block structure; all heatmaps of a dataset
+(data, model-implied, residuals) share the order, and "↺ order" restores it. The
+drag handles are HTML strips over the numbers (`touch-action: none` does not
+work on SVG shapes, which made touch drags turn into scrolling).
+
 ## Look
 
 "Analysis workstation" frame: panes as windows, a status bar (what the program

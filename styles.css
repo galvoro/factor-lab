@@ -296,7 +296,21 @@ button { font-family: inherit; color: inherit; }
 .scree-axes .axis { stroke: var(--ink-2); stroke-width: 1; }
 .scree-axes .kaiser { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 5 4; }
 .scree-legend text { fill: var(--ink-2); font-family: var(--f-body); }
-.hm-labels text { fill: var(--ink-2); font-family: var(--f-mono); }
+.hm-labels text { fill: var(--ink-2); font-family: var(--f-mono); pointer-events: none; }
+/* reorderable heatmap: drag the row / column numbers */
+.hm-strip { position: absolute; z-index: 2; cursor: grab; touch-action: none; border-radius: 4px; }
+.hm-strip:hover { background: rgba(227, 155, 45, 0.12); }
+.hm-strip:active { cursor: grabbing; }
+svg.hm-dragging, svg.hm-dragging * { cursor: grabbing !important; }
+.hm-labels text.dragging { fill: var(--amber-deep); font-weight: 700; }
+.hm-cell.hm-drag-line { stroke: var(--amber); stroke-width: 1.6; }
+.hm-reset {
+  position: absolute; top: 4px; right: 6px; z-index: 3;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-2); border-radius: 999px;
+  padding: 1px 8px; font-family: var(--f-mono); font-size: 10.5px; cursor: pointer;
+}
+.hm-reset:hover { border-color: var(--amber); color: var(--amber-ink); }
+.panel.reordered figcaption .cap-sub { display: none; }
 .hm-val { font-family: var(--f-mono); pointer-events: none; }
 .hm-cell, .hm-val { transition: opacity 0.15s; }
 /* highlighted items: their rows and columns stay, the rest fades */

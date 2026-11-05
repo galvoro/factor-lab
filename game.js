@@ -340,15 +340,63 @@
     const d = c.dash;
     const learn = G.mode === 'learn';
     DD.cap('scree', 'Scree plot', learn ? '· implied' : '');
-    DD.cap('heat', learn ? 'Implied correlations' : 'Correlations');
+    DD.cap('heat', learn ? 'Implied correlations' : 'Correlations', '· drag a number to reorder');
     DD.cap('net', learn ? 'Implied correlation network' : 'Correlation network');
     DD.cap('pcor', learn ? 'Implied partial correlation network' : 'Regularized partial correlation network');
     P.scree(DD.svg('scree'), [{ values: d.ev, color: '#20252C', label: learn ? 'implied' : 'data' }], { onHover: hover('scree') });
-    P.heatmap(DD.svg('heat'), d.R, { maximum: 1, onHover: hover('cor') });
+    drawDataHeat();
     P.network(DD.svg('net'), d.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
     P.network(DD.svg('pcor'), d.G, d.layout, { maximum: d.maxG, onHover: hover(learn ? 'pcor' : 'gpcor') });
     applyHighlight(hlSet(), HL.pair);
   }
+
+  // ---- heatmap order: drag a row/column number to move that item; all
+  // heatmaps (data, model-implied, residuals) share one order per dataset ----
+  function hmOrder() {
+    const c = G.cur, n = c.dash.R.length;
+    let o = c.hmOrder;
+    if (!o || o.length !== n) {
+      // keep the order when an item is appended (LEARN), otherwise start fresh
+      o = o && o.length === n - 1 ? o.concat(n - 1) : [...Array(n).keys()];
+      c.hmOrder = o;
+    }
+    return o;
+  }
+  function onReorder(o) {
+    G.cur.hmOrder = o;
+    drawDataHeat();
+    if (G.phase === 'results' && G.rview !== 'diagram') drawModelHeat();
+    applyHighlight(hlSet(), HL.pair);
+  }
+  function syncHmReset() {
+    const o = G.cur && G.cur.hmOrder;
+    const moved = !!o && o.some((v, k) => v !== k);
+    document.querySelectorAll('.hm-reset').forEach(b => {
+      b.classList.toggle('hidden', !moved);
+      b.parentNode.classList.toggle('reordered', moved);      // hides the "drag a number" hint
+    });
+  }
+  function drawDataHeat() {
+    const d = G.cur.dash;
+    if (!visible(DD.root)) return;
+    P.heatmap(DD.svg('heat'), d.R, { maximum: 1, onHover: hover('cor'), order: hmOrder(), onReorder });
+    syncHmReset();
+  }
+  function drawModelHeat() {
+    const c = G.cur, m = modelDash();
+    if (!m || !visible(MD.root)) return;
+    const opt = { onHover: hover('cor'), order: hmOrder(), onReorder };
+    if (G.rview === 'implied') P.heatmap(MD.svg('heat'), m.R, Object.assign({ maximum: 1 }, opt));
+    else P.heatmap(MD.svg('heat'), subM(c.dash.R, m.R), Object.assign({ maximum: CONFIG.RESID_MAX }, opt));
+    syncHmReset();
+  }
+  document.querySelectorAll('.hm-reset').forEach(b => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    SFX('click');
+    if (!G.cur) return;
+    G.cur.hmOrder = [...Array(G.cur.dash.R.length).keys()];
+    onReorder(G.cur.hmOrder);
+  }));
 
   function renderModel() {
     const c = G.cur, m = modelDash();
@@ -361,7 +409,7 @@
     ], { onHover: hover('scree') });
     if (G.rview === 'implied') {
       MD.cap('heat', 'Model-implied correlations');
-      P.heatmap(MD.svg('heat'), m.R, { maximum: 1, onHover: hover('cor') });
+      drawModelHeat();
       MD.cap('net', 'Model-implied network');
       P.network(MD.svg('net'), m.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
       MD.cap('pcor', 'Model-implied regularized network');
@@ -370,7 +418,7 @@
       const RM = CONFIG.RESID_MAX, RP = CONFIG.RESID_MAX_P;
       const sc = (v) => '· scale ±' + v.toFixed(2).replace(/^0/, '');
       MD.cap('heat', 'Residual correlations', '(data − model)');
-      P.heatmap(MD.svg('heat'), subM(d.R, m.R), { maximum: RM, onHover: hover('cor') });
+      drawModelHeat();
       MD.cap('net', 'Residual network', sc(RM));
       P.network(MD.svg('net'), subM(d.R, m.R), d.layout, { maximum: RM, onHover: hover('cor') });
       MD.cap('pcor', 'Residual partial network', sc(RP));

@@ -7,7 +7,7 @@
   const CARDS = [
     { title: 'THE DATA', c: '#B87613',
       body: 'A hidden factor model generated the answers of 150–500 people to 4–9 items. ' +
-        'Left: their correlations as a scree plot, a heatmap and two networks. ' +
+        'Left: their correlations as a scree plot, a heatmap (drag its numbers to reorder it) and two networks. ' +
         '<span class="pos">Blue</span> = positive, <span class="neg">red</span> = negative.' },
     { title: 'DRAW A MODEL', c: '#2B2F36',
       body: '<b>Double-click</b> the canvas to add a factor, then click its items. ' +
