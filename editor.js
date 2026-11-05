@@ -4,7 +4,10 @@
 //   load : factor -> item     (factor loading)
 //   reg  : factor -> factor   (regression between factors)
 //   cov  : item <-> item (residual covariance) or factor <-> factor
-// Coordinates are stored normalised to the canvas (0..1) so the diagram
+// Every item has a hidden residual: a short arrow into the item whose tail
+// carries the residual variance after a fit. Residual covariances are drawn
+// between these residuals, not between the item boxes (semPlot / qgraph
+// path-diagram style). Coordinates are stored normalised to the canvas (0..1) so the diagram
 // survives resizes. After a fit, paths are coloured like semPlot /
 // qgraph theme = "colorblind" (blue +, red -) with width ~ |standardized|.
 (function (global) {
@@ -20,6 +23,7 @@
     return e;
   }
   const hyp = Math.hypot;
+  const Y_OBS = 0.6;         // items row (leaves room below for residuals)
 
   function create(svg, opts) {
     opts = opts || {};
@@ -29,6 +33,7 @@
       sel: new Set(),          // ids of selected nodes / edges
       tool: 'select',
       fit: null,               // map edge id -> { std, est }, plus resid
+      fitT: 1,                 // 0..1 while the fitted values animate in
       stale: false,
       showValues: true,
       history: [],
@@ -38,12 +43,15 @@
     let drag = null;           // current pointer interaction
     let pending = null;        // tap-tap connection source id
     let anim = null;
+    let fitAnim = null;
+    let lastTap = null;        // for double-click / double-tap on the background
 
     // ---------------- geometry ----------------
     function dims() {
       const p = Math.max(S.obs.length, 1);
-      const side = Math.max(26, Math.min(48, W / (p + 2.2), H / 7));
-      return { side, half: side / 2, R: side * 0.66 };
+      const side = Math.max(26, Math.min(48, W / (p + 2.2), H / 7.5));
+      // rr: radius of the (invisible) residual node; stub: arrow length into the item
+      return { side, half: side / 2, R: side * 0.66, rr: Math.max(9, side * 0.3), stub: side * 0.42 };
     }
     function px(n) { return [n.x * W, n.y * H]; }
     function node(id) { return S.obs.find(o => o.id === id) || S.lat.find(l => l.id === id); }
@@ -60,6 +68,28 @@
       let x = 0, y = 0;
       for (const n of all) { x += n.x * W; y += n.y * H; }
       return [x / all.length, y / all.length];
+    }
+    // Position of an item's hidden residual: on the side away from its
+    // factors, snapped to vertical / horizontal (semPlot style).
+    function residAnchor(o) {
+      const d = dims();
+      const [x, y] = px(o);
+      const facs = S.edges.filter(e => e.kind === 'load' && e.b === o.id).map(e => node(e.a)).filter(Boolean);
+      let ux = 0, uy = 1;
+      if (facs.length) {
+        const fx = facs.reduce((s, f) => s + f.x * W, 0) / facs.length;
+        const fy = facs.reduce((s, f) => s + f.y * H, 0) / facs.length;
+        const L = hyp(x - fx, y - fy) || 1;
+        ux = (x - fx) / L; uy = (y - fy) / L;
+        if (Math.abs(uy) >= 0.3) { ux = 0; uy = Math.sign(uy); } else { ux = Math.sign(ux) || 1; uy = 0; }
+      }
+      const tip = boundary(o, ux, uy);
+      const k = d.stub + d.rr;
+      return { ux, uy, tip, c: [tip[0] + ux * k, tip[1] + uy * k], rr: d.rr };
+    }
+    function pathWidth(a) {
+      const esize = Math.max(6, dims().side * 0.2);
+      return 1.2 + a * (esize - 1.2);
     }
 
     // ---------------- state helpers ----------------
@@ -179,7 +209,9 @@
       return { spec, edgeParam, key, factorIds: S.lat.map(l => l.id) };
     }
 
-    function setFitResult(result) {
+    function setFitResult(result, o) {
+      if (fitAnim) { cancelAnimationFrame(fitAnim); fitAnim = null; }
+      S.fitT = 1;
       if (!result) { S.fit = null; render(); return; }
       const { edgeParam } = getSpec();
       const map = {};
@@ -189,6 +221,20 @@
       for (const o of S.obs) { const e = find({ mat: 'T', r: o.idx, c: o.idx }); if (e) resid[o.idx] = e; }
       S.fit = { map, resid };
       S.stale = false;
+      if (o && o.animate) {
+        // paths grow from neutral to their estimated colour and width
+        const t0 = performance.now(), dur = o.duration || 900;
+        S.fitT = 0;
+        const step = (now) => {
+          const t = Math.min(1, (now - t0) / dur);
+          S.fitT = t >= 1 ? 1 : 1 - Math.pow(1 - t, 3);
+          render();
+          if (t < 1) fitAnim = requestAnimationFrame(step);
+          else { fitAnim = null; if (o.onDone) o.onDone(); }
+        };
+        fitAnim = requestAnimationFrame(step);
+        return;
+      }
       render();
     }
 
@@ -219,10 +265,10 @@
       const fe = S.fit && !S.stale ? S.fit.map[e.id] : null;
       if (!fe) return { color: INK, width: 2, std: null };
       const P = FF.plots;
+      const t = S.fitT;
       const a = Math.min(1, Math.abs(fe.std));
-      const color = P.fade(fe.std >= 0 ? P.POS : P.NEG, Math.max(0.22, a));
-      const esize = Math.max(6, dims().side * 0.2);
-      return { color, width: 1.2 + a * (esize - 1.2), std: fe.std };
+      const color = P.fade(fe.std >= 0 ? P.POS : P.NEG, Math.max(0.22, a * t));
+      return { color, width: 2 + (pathWidth(a) - 2) * t, std: fe.std };
     }
 
     function covControl(A, B, e) {
@@ -255,7 +301,39 @@
       const g = el('g', { class: 'd-edge' + (S.sel.has(e.id) ? ' sel' : ''), 'data-id': e.id }, gEdges);
       const head = Math.max(9, dims().side * 0.24) + st.width * 0.9;
       let pathD, labelPos;
-      if (e.kind === 'cov') {
+      if (e.kind === 'cov' && !isLat(e.a)) {
+        // residual covariance: between the two hidden residuals
+        const ra = residAnchor(A), rb = residAnchor(B);
+        const [ax, ay] = ra.c, [bx, by] = rb.c;
+        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        const L = hyp(bx - ax, by - ay) || 1;
+        let nx = ra.ux + rb.ux, ny = ra.uy + rb.uy;
+        const nl = hyp(nx, ny);
+        if (nl < 0.5) {
+          nx = -(by - ay) / L; ny = (bx - ax) / L;
+          const cen = centroid();
+          if ((cen[0] - mx) * nx + (cen[1] - my) * ny > 0) { nx = -nx; ny = -ny; }
+        } else { nx /= nl; ny /= nl; }
+        let off = Math.min(0.6 * L, 0.22 * L + 3 * ra.rr);
+        for (let k = 0; k < 10; k++) {          // keep the curve inside the canvas
+          const apx = mx + nx * off / 2, apy = my + ny * off / 2;
+          if (apx > 8 && apx < W - 8 && apy > 8 && apy < H - 8) break;
+          off *= 0.7;
+        }
+        const C = [mx + nx * off, my + ny * off];
+        let u1 = [C[0] - ax, C[1] - ay]; let l1 = hyp(...u1) || 1; u1 = [u1[0] / l1, u1[1] / l1];
+        let u2 = [C[0] - bx, C[1] - by]; let l2 = hyp(...u2) || 1; u2 = [u2[0] / l2, u2[1] / l2];
+        const s = [ax + u1[0] * ra.rr, ay + u1[1] * ra.rr], t = [bx + u2[0] * rb.rr, by + u2[1] * rb.rr];
+        const s2 = [s[0] + u1[0] * head * 0.85, s[1] + u1[1] * head * 0.85];
+        const t2 = [t[0] + u2[0] * head * 0.85, t[1] + u2[1] * head * 0.85];
+        pathD = `M${s2[0]},${s2[1]} Q${C[0]},${C[1]} ${t2[0]},${t2[1]}`;
+        el('path', { d: `M${s[0]},${s[1]} Q${C[0]},${C[1]} ${t[0]},${t[1]}`, class: 'd-hit' }, g);
+        el('path', { d: pathD, fill: 'none', stroke: st.color, 'stroke-width': st.width, class: 'd-line' }, g);
+        arrowHead(g, s, -u1[0], -u1[1], head, st.color);
+        arrowHead(g, t, -u2[0], -u2[1], head, st.color);
+        const lift = Math.max(10, Math.min(13, dims().side * 0.3)) * 0.95 + st.width / 2;
+        labelPos = [0.25 * s[0] + 0.5 * C[0] + 0.25 * t[0] + nx * lift, 0.25 * s[1] + 0.5 * C[1] + 0.25 * t[1] + ny * lift];
+      } else if (e.kind === 'cov') {
         const C = covControl(A, B, e);
         const [ax, ay] = px(A), [bx, by] = px(B);
         let u1 = [C[0] - ax, C[1] - ay]; let l1 = hyp(...u1) || 1; u1 = [u1[0] / l1, u1[1] / l1];
@@ -278,9 +356,10 @@
         el('line', { x1: s[0], y1: s[1], x2: t[0], y2: t[1], class: 'd-hit' }, g);
         el('line', { x1: s[0], y1: s[1], x2: t2[0], y2: t2[1], stroke: st.color, 'stroke-width': st.width, class: 'd-line' }, g);
         arrowHead(g, t, ux, uy, head, st.color);
-        labelPos = [s[0] + (t[0] - s[0]) * 0.5, s[1] + (t[1] - s[1]) * 0.5];
+        const at = e.kind === 'load' ? 0.62 : 0.5;
+        labelPos = [s[0] + (t[0] - s[0]) * at, s[1] + (t[1] - s[1]) * at];
       }
-      if (st.std !== null && S.showValues) {
+      if (st.std !== null && S.showValues && S.fitT >= 1) {
         const fs = Math.max(10, Math.min(13, dims().side * 0.3));
         const lg = el('g', { class: 'd-elabel' }, gLabels);
         const txt = FF.plots.fmt2(st.std);
@@ -292,31 +371,30 @@
     }
 
     function drawResidual(o) {
-      // short arrow into the item, from the side away from its factors
+      // short arrow from the item's hidden residual into the item; after a
+      // fit it is weighted by the standardized residual variance and the
+      // residual shows that value
       const d = dims();
-      const [x, y] = px(o);
-      const facs = S.edges.filter(e => e.kind === 'load' && e.b === o.id).map(e => node(e.a)).filter(Boolean);
-      let ux = 0, uy = 1;
-      if (facs.length) {
-        const fx = facs.reduce((s, f) => s + f.x * W, 0) / facs.length;
-        const fy = facs.reduce((s, f) => s + f.y * H, 0) / facs.length;
-        const L = hyp(x - fx, y - fy) || 1;
-        ux = (x - fx) / L; uy = (y - fy) / L;
-        // snap to the dominant axis (semPlot-style residuals below / beside)
-        if (Math.abs(uy) >= 0.3) { ux = 0; uy = Math.sign(uy); } else { ux = Math.sign(ux) || 1; uy = 0; }
-      }
-      const tip = boundary(o, ux, uy);
-      const len = d.side * 0.62;
-      const start = [tip[0] + ux * len, tip[1] + uy * len];
+      const a = residAnchor(o);
       const fe = S.fit && !S.stale ? S.fit.resid[o.idx] : null;
-      const g = el('g', { class: 'd-resid' }, gEdges);
-      const head = Math.max(7, d.side * 0.18);
-      el('line', { x1: start[0], y1: start[1], x2: tip[0] + ux * head * 0.8, y2: tip[1] + uy * head * 0.8, class: 'd-resid-line' }, g);
-      arrowHead(g, tip, -ux, -uy, head, '#9AA0A8');
-      if (fe && S.showValues) {
-        const fs = Math.max(9, Math.min(11, d.side * 0.26));
-        const t = el('text', { x: start[0] + ux * fs * 0.9, y: start[1] + uy * fs * 0.9, 'font-size': fs, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-resid-val' }, g);
+      const g = el('g', { class: 'd-resid' + (fe ? ' fitted' : '') }, gEdges);
+      let color = '#9AA0A8', width = 1.4;
+      if (fe) {
+        const v = Math.min(1, Math.abs(fe.std));
+        color = FF.plots.fade(fe.std >= 0 ? FF.plots.POS : FF.plots.NEG, Math.max(0.22, v * S.fitT));
+        width = 1.4 + (pathWidth(v) - 1.4) * S.fitT;
+      }
+      const head = Math.max(7, d.side * 0.18) + (fe ? width * 0.5 : 0);
+      const start = [a.c[0] - a.ux * a.rr, a.c[1] - a.uy * a.rr];
+      el('line', { x1: start[0], y1: start[1], x2: a.tip[0] + a.ux * head * 0.8, y2: a.tip[1] + a.uy * head * 0.8,
+        stroke: color, 'stroke-width': width, class: 'd-resid-line' }, g);
+      arrowHead(g, a.tip, -a.ux, -a.uy, head, color);
+      if (fe && S.showValues && S.fitT >= 1) {
+        const fs = Math.max(9.5, Math.min(12, d.side * 0.27));
+        const t = el('text', { x: a.c[0], y: a.c[1], 'font-size': fs, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-resid-val' }, g);
         t.textContent = FF.plots.fmt2(fe.std);
+      } else if (!fe) {
+        el('circle', { cx: a.c[0], cy: a.c[1], r: Math.max(2.5, a.rr * 0.28), class: 'd-resid-dot' }, g);
       }
     }
 
@@ -336,6 +414,10 @@
         const g = el('g', { class: 'd-node lat' + (S.sel.has(l.id) ? ' sel' : '') + (pending === l.id ? ' pending' : ''), 'data-id': l.id }, gNodes);
         el('circle', { cx: x, cy: y, r: d.R + 6, class: 'd-halo' }, g);
         el('circle', { cx: x, cy: y, r: d.R, class: 'd-shape' }, g);
+        if (l.label) {
+          const t = el('text', { x, y, 'font-size': d.R * 0.72, 'text-anchor': 'middle', 'dominant-baseline': 'central', class: 'd-label lat-label' }, g);
+          t.textContent = l.label;
+        }
       }
       for (const o of S.obs) {
         const [x, y] = px(o);
@@ -368,6 +450,13 @@
       }
       return null;
     }
+    function hitResid(x, y, slop) {
+      for (let i = S.obs.length - 1; i >= 0; i--) {
+        const a = residAnchor(S.obs[i]);
+        if (hyp(x - a.c[0], y - a.c[1]) <= a.rr + (slop || 6)) return S.obs[i];
+      }
+      return null;
+    }
     function hitEdge(target) {
       const g = target && target.closest ? target.closest('.d-edge') : null;
       return g ? g.getAttribute('data-id') : null;
@@ -381,10 +470,26 @@
       ev.preventDefault();
       svg.setPointerCapture(ev.pointerId);
       const [x, y] = pt(ev);
-      const n = hitNode(x, y, ev.pointerType === 'touch' ? 12 : 5);
-      const eid = n ? null : hitEdge(ev.target);
       const tool = S.tool;
+      const slop = ev.pointerType === 'touch' ? 12 : 5;
+      const n = hitNode(x, y, slop) || (tool === 'cov' || tool === 'arrow' ? hitResid(x, y, slop) : null);
+      const eid = n ? null : hitEdge(ev.target);
       drag = { x0: x, y0: y, moved: false, node: n, edge: eid, tool, shift: ev.shiftKey || ev.metaKey || ev.ctrlKey };
+
+      // double-click / double-tap on empty canvas: new factor there, with
+      // loadings to the items that were selected before the first click
+      if (!n && !eid && tool !== 'erase') {
+        const now = performance.now();
+        if (lastTap && now - lastTap.t < 420 && hyp(x - lastTap.x, y - lastTap.y) < 26) {
+          const items = lastTap.items;
+          lastTap = null; drag = null; pending = null;
+          addFactor(clampN(x / W), clampN(y / H), items);
+          if (tool === 'factor') setTool('select');
+          if (opts.onSelect) opts.onSelect(selection());
+          return;
+        }
+        lastTap = { t: now, x, y, items: [...S.sel].filter(id => id[0] === 'o') };
+      } else lastTap = null;
 
       if (tool === 'erase') {
         if (n && n.kind === 'lat') removeIds([n.id]);
@@ -394,6 +499,7 @@
       }
       if (tool === 'factor') {
         if (!n && !eid) {
+          lastTap = null;
           addFactor(clampN(x / W), clampN(y / H), []);
           setTool('select');
           drag = null;
@@ -451,8 +557,8 @@
       } else if (drag.kind === 'connect' && drag.from) {
         while (gOver.firstChild) gOver.removeChild(gOver.firstChild);
         const A = node(drag.from);
-        const [ax, ay] = px(A);
-        const tgt = hitNode(x, y, 8);
+        const [ax, ay] = drag.tool === 'cov' && A.kind === 'obs' ? residAnchor(A).c : px(A);
+        const tgt = hitNode(x, y, 8) || hitResid(x, y, 8);
         el('line', { x1: ax, y1: ay, x2: x, y2: y, class: 'd-temp' + (drag.tool === 'cov' ? ' cov' : '') }, gOver);
         if (tgt && tgt.id !== drag.from) {
           const d = dims();
@@ -491,7 +597,8 @@
           if (opts.onChange) opts.onChange({ structural: false });
         }
       } else if (d0.kind === 'connect') {
-        const tgt = hitNode(x, y, ev.pointerType === 'touch' ? 14 : 8);
+        const sl = ev.pointerType === 'touch' ? 14 : 8;
+        const tgt = hitNode(x, y, sl) || hitResid(x, y, sl);
         if (d0.moved && tgt && tgt.id !== d0.from) {
           addEdge(d0.tool, d0.from, tgt.id);
           pending = null;
@@ -538,9 +645,10 @@
     }
     function reset(p) {
       S.obs = []; S.lat = []; S.edges = []; S.nextLat = 1; S.nextEdge = 1;
-      S.sel.clear(); S.fit = null; S.stale = false; S.history = []; pending = null;
+      S.sel.clear(); S.fit = null; S.fitT = 1; S.stale = false; S.history = []; pending = null; lastTap = null;
+      if (fitAnim) { cancelAnimationFrame(fitAnim); fitAnim = null; }
       for (let i = 0; i < p; i++) {
-        S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: p === 1 ? 0.5 : 0.08 + 0.84 * i / (p - 1), y: 0.74 });
+        S.obs.push({ id: 'o' + i, kind: 'obs', idx: i, x: p === 1 ? 0.5 : 0.08 + 0.84 * i / (p - 1), y: Y_OBS });
       }
       measure();
       render();
@@ -556,7 +664,7 @@
       const ns = items.map(node);
       const x = ns.reduce((s, n) => s + n.x, 0) / ns.length;
       const yMin = Math.min(...ns.map(n => n.y));
-      const y = Math.max(0.1, yMin - 0.42);
+      const y = Math.max(0.1, yMin - 0.36);
       return addFactor(x, y, items);
     }
     function undo() {
@@ -597,7 +705,7 @@
       for (const l of first) S.obs.filter(o => primary[o.id] === l.id).sort((a, b) => a.x - b.x).forEach(o => order.push(o));
       S.obs.filter(o => !primary[o.id]).sort((a, b) => a.x - b.x).forEach(o => order.push(o));
       const p = order.length;
-      const yObs = 0.74, yLat = higher.length ? 0.38 : 0.3, yHigh = 0.12;
+      const yObs = Y_OBS, yLat = higher.length ? 0.32 : 0.24, yHigh = 0.09;
       order.forEach((o, k) => { o.x = p === 1 ? 0.5 : 0.08 + 0.84 * k / (p - 1); o.y = yObs; });
       first.forEach((l, k) => {
         const its = S.obs.filter(o => primary[o.id] === l.id);
@@ -636,10 +744,15 @@
     }
 
     // Load a structure (used for the true-model reveal).
-    function loadSpec(spec, p) {
+    function loadSpec(spec, p, o) {
       reset(p);
       const ids = [];
-      for (let j = 0; j < spec.m; j++) { const id = 'f' + (S.nextLat++); S.lat.push({ id, kind: 'lat', x: (j + 1) / (spec.m + 1), y: 0.3 }); ids.push(id); }
+      const letters = (o && o.labels) || null;
+      for (let j = 0; j < spec.m; j++) {
+        const id = 'f' + (S.nextLat++);
+        S.lat.push({ id, kind: 'lat', x: (j + 1) / (spec.m + 1), y: 0.24, label: letters ? letters[j] : undefined });
+        ids.push(id);
+      }
       for (const [i, j] of spec.loadings) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'load', a: ids[j], b: 'o' + i });
       for (const [t, f] of spec.regressions || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'reg', a: ids[f], b: ids[t] });
       for (const [a, b] of spec.factorCovs || []) S.edges.push({ id: 'e' + (S.nextEdge++), kind: 'cov', a: ids[a], b: ids[b] });
@@ -665,6 +778,7 @@
       set showValues(v) { S.showValues = !!v; render(); },
       get showValues() { return S.showValues; },
       get counts() { return { factors: S.lat.length, edges: S.edges.length }; },
+      get edges() { return S.edges.map(x => Object.assign({}, x)); },
       cancelPending() { pending = null; render(); },
     };
     return api;

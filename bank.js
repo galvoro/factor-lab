@@ -1,124 +1,144 @@
-// FACTOR FIND — item bank of true (data-generating) factor models.
+// FACTOR FIND — bank of true (data-generating) factor-model structures.
 //
-// Every model is in the standardized metric: items have unit variance in the
-// population, `L` holds standardized loadings (rows = items, cols = factors),
-// `phi` lists factor correlations [a, b, r] (absent pairs are orthogonal),
-// and `resid` lists residual covariances between items [i, j, cov].
-// Residual variances are 1 - communality.
+// Each round picks a structure template and draws fresh parameter values
+// from RANGES, so no two datasets are alike. Everything is in the
+// standardized metric: items have unit variance in the population, `L`
+// holds standardized loadings (rows = items, cols = factors), `phi` lists
+// factor correlations [a, b, r] (absent pairs are uncorrelated), and
+// `resid` lists residual covariances [i, j, cov, r] (r = the correlation
+// between the two residuals). Residual variances are 1 - communality.
 //
-// tier 1 = one clean factor, 2 = two clean factors / one twist,
-// tier 3 = two factors with complications, 4 = three factors.
+// Template notation (items are numbered from 0, consecutively per factor):
+//   sizes : number of items per factor
+//   rev   : items whose primary loading is negative (reverse-keyed)
+//   cross : [item, factor, sign]  secondary (cross-) loadings
+//   resid : [i, j]                residual correlations (positive)
+//   neg   : [a, b]                negatively correlated factor pairs
+//   orth  : [a, b]                uncorrelated factor pairs
+//
+// level 1 = clean structure, 2 = one twist, 3 = several twists.
 (function (global) {
   'use strict';
   const FF = global.FF = global.FF || {};
   const la = FF.la;
 
-  const MODELS = [
-    // ---------------- tier 1: one factor ----------------
-    { id: 'B01', tier: 1, name: 'Warm-up',
-      note: 'One factor, four strong items.',
-      L: [[.80], [.75], [.70], [.60]] },
-    { id: 'B02', tier: 1, name: 'Five of a kind',
-      note: 'One factor, five items of decreasing quality.',
-      L: [[.75], [.70], [.65], [.60], [.50]] },
-    { id: 'B03', tier: 1, name: 'Reverse-keyed',
-      note: 'One factor with two reverse-keyed (negatively loading) items.',
-      L: [[.70], [.65], [-.60], [.65], [-.55], [.50]] },
-    { id: 'B04', tier: 1, name: 'Long scale',
-      note: 'One factor, seven items.',
-      L: [[.70], [.65], [.60], [.60], [.55], [.50], [.45]] },
+  const RANGES = {
+    load: [0.50, 0.90],    // primary loadings (absolute value)
+    cross: [0.30, 0.50],   // cross-loadings (absolute value)
+    phi: [0.20, 0.60],     // factor correlations (absolute value)
+    resid: [0.25, 0.45],   // correlations between residuals
+    minTheta: 0.15,        // smallest residual variance allowed
+  };
 
-    // ---------------- tier 2: two factors / one twist ----------------
-    { id: 'B05', tier: 2, name: 'Two by three',
-      note: 'Two correlated factors, three items each.',
-      L: [[.75, 0], [.70, 0], [.65, 0], [0, .70], [0, .65], [0, .60]],
-      phi: [[0, 1, .35]] },
-    { id: 'B06', tier: 2, name: 'Four and three',
-      note: 'Two factors that correlate .50.',
-      L: [[.70, 0], [.70, 0], [.60, 0], [.55, 0], [0, .75], [0, .65], [0, .60]],
-      phi: [[0, 1, .50]] },
-    { id: 'B07', tier: 2, name: 'Orthogonal',
-      note: 'Two uncorrelated factors: the correlation matrix splits into two blocks.',
-      L: [[.70, 0], [.65, 0], [.60, 0], [.60, 0], [0, .70], [0, .65], [0, .60], [0, .55]] },
-    { id: 'B08', tier: 2, name: 'Opposites',
-      note: 'Two factors that correlate negatively (−.40).',
-      L: [[.75, 0], [.70, 0], [.60, 0], [0, .70], [0, .65], [0, .65]],
-      phi: [[0, 1, -.40]] },
-    { id: 'B09', tier: 2, name: 'Method effect',
-      note: 'One factor; two items share extra variance (a residual correlation).',
-      L: [[.70], [.65], [.60], [.60], [.55], [.50]],
-      resid: [[4, 5, .28]] },
+  const T = (id, level, name, sizes, extra) =>
+    Object.assign({ id, level, name, sizes, rev: [], cross: [], resid: [], neg: [], orth: [] }, extra || {});
 
-    // ---------------- tier 3: two factors with complications ----------------
-    { id: 'B10', tier: 3, name: 'Cross-loader',
-      note: 'Two factors; one item loads on both.',
-      L: [[.70, 0], [.65, 0], [.60, 0], [.45, .45], [0, .70], [0, .65], [0, .60]],
-      phi: [[0, 1, .30]] },
-    { id: 'B11', tier: 3, name: 'Twin items',
-      note: 'Two factors; two items of the same factor share a residual correlation.',
-      L: [[.70, 0], [.65, 0], [.60, 0], [.55, 0], [0, .70], [0, .65], [0, .60], [0, .55]],
-      phi: [[0, 1, .40]],
-      resid: [[2, 3, .30]] },
-    { id: 'B12', tier: 3, name: 'Negative cross-loading',
-      note: 'Two factors; one item loads positively on one and negatively on the other.',
-      L: [[.75, 0], [.70, 0], [.60, -.40], [0, .70], [0, .65], [0, .60]],
-      phi: [[0, 1, .45]] },
-    { id: 'B13', tier: 3, name: 'Double trouble',
-      note: 'Two factors with a cross-loading and a residual correlation.',
-      L: [[.70, 0], [.65, 0], [.60, 0], [.60, 0], [.45, .45], [0, .70], [0, .65], [0, .60], [0, .55]],
-      phi: [[0, 1, .35]],
-      resid: [[0, 1, .22]] },
-    { id: 'B14', tier: 3, name: 'Bridge',
-      note: 'Two factors connected by a residual correlation across factors.',
-      L: [[.70, 0], [.65, 0], [.60, 0], [.60, 0], [0, .70], [0, .65], [0, .60], [0, .60]],
-      phi: [[0, 1, .30]],
-      resid: [[3, 4, .25]] },
+  const TEMPLATES = [
+    // ---------------- level 1: clean structure ----------------
+    T('E01', 1, 'One factor, four items', [4]),
+    T('E02', 1, 'One factor, five items', [5]),
+    T('E03', 1, 'One factor, six items', [6]),
+    T('E04', 1, 'One factor, seven items', [7]),
+    T('E05', 1, 'One factor, eight items', [8]),
+    T('E06', 1, 'One factor, nine items', [9]),
+    T('E07', 1, 'One reversed item', [5], { rev: [4] }),
+    T('E08', 1, 'Two reversed items', [6], { rev: [2, 5] }),
+    T('E09', 1, 'Reversed item in a long scale', [8], { rev: [3] }),
+    T('E10', 1, 'Two by three', [3, 3]),
+    T('E11', 1, 'Four and three', [4, 3]),
+    T('E12', 1, 'Two by four', [4, 4]),
+    T('E13', 1, 'Five and four', [5, 4]),
+    T('E14', 1, 'Opposites', [3, 3], { neg: [[0, 1]] }),
+    T('E15', 1, 'Opposites, longer', [4, 4], { neg: [[0, 1]] }),
+    T('E16', 1, 'Two factors, one reversed item', [4, 3], { rev: [1] }),
 
-    // ---------------- tier 4: three factors ----------------
-    { id: 'B15', tier: 4, name: 'Three by three',
-      note: 'Three correlated factors, three items each.',
-      L: [[.75, 0, 0], [.70, 0, 0], [.65, 0, 0], [0, .70, 0], [0, .70, 0], [0, .60, 0],
-          [0, 0, .75], [0, 0, .65], [0, 0, .60]],
-      phi: [[0, 1, .30], [0, 2, .20], [1, 2, .40]] },
-    { id: 'B16', tier: 4, name: 'Three with a cross-loader',
-      note: 'Three factors; one item loads on two of them.',
-      L: [[.75, 0, 0], [.70, 0, 0], [.45, .45, 0], [0, .70, 0], [0, .65, 0], [0, .60, 0],
-          [0, 0, .75], [0, 0, .65], [0, 0, .60]],
-      phi: [[0, 1, .25], [0, 2, .25], [1, 2, .35]] },
-    { id: 'B17', tier: 4, name: 'Short scale',
-      note: 'Three factors; the third has only two items (identified through its correlations).',
-      L: [[.75, 0, 0], [.70, 0, 0], [.65, 0, 0], [0, .70, 0], [0, .70, 0], [0, .60, 0],
-          [0, 0, .80], [0, 0, .70]],
-      phi: [[0, 1, .30], [0, 2, .40], [1, 2, .30]] },
-    { id: 'B18', tier: 4, name: 'Three and a bridge',
-      note: 'Three factors and a residual correlation between items of different factors.',
-      L: [[.75, 0, 0], [.70, 0, 0], [.65, 0, 0], [0, .70, 0], [0, .65, 0], [0, .65, 0],
-          [0, 0, .75], [0, 0, .70], [0, 0, .60]],
-      phi: [[0, 1, .30], [0, 2, .30], [1, 2, .30]],
-      resid: [[2, 6, .25]] },
-    { id: 'B19', tier: 4, name: 'Minimalist',
-      note: 'Three factors from seven items: two factors have only two indicators.',
-      L: [[.75, 0, 0], [.70, 0, 0], [.65, 0, 0], [0, .80, 0], [0, .70, 0], [0, 0, .80], [0, 0, .70]],
-      phi: [[0, 1, .35], [0, 2, .25], [1, 2, .40]] },
-    { id: 'B20', tier: 4, name: 'Final boss',
-      note: 'Three factors, a cross-loading, a negative factor correlation and a residual correlation.',
-      L: [[.75, 0, 0], [.70, 0, 0], [.60, 0, 0], [.45, .50, 0], [0, .70, 0], [0, .65, 0],
-          [0, 0, .70], [0, 0, .65], [0, 0, .60]],
-      phi: [[0, 1, .35], [0, 2, -.30], [1, 2, .25]],
-      resid: [[7, 8, .25]] },
+    // ---------------- level 2: one twist ----------------
+    T('M01', 2, 'Method effect', [6], { resid: [[4, 5]] }),
+    T('M02', 2, 'Method effect, short scale', [5], { resid: [[0, 1]] }),
+    T('M03', 2, 'Method effect, long scale', [8], { resid: [[2, 6]] }),
+    T('M04', 2, 'Reversed item and a twin pair', [7], { rev: [6], resid: [[1, 2]] }),
+    T('M05', 2, 'Cross-loader', [3, 3], { cross: [[2, 1, 1]] }),
+    T('M06', 2, 'Cross-loader, four and three', [4, 3], { cross: [[3, 1, 1]] }),
+    T('M07', 2, 'Cross-loader, two by four', [4, 4], { cross: [[1, 1, 1]] }),
+    T('M08', 2, 'Negative cross-loading', [4, 3], { cross: [[2, 1, -1]] }),
+    T('M09', 2, 'Twin items', [4, 4], { resid: [[2, 3]] }),
+    T('M10', 2, 'Bridge', [3, 4], { resid: [[2, 3]] }),
+    T('M11', 2, 'Twins in the second factor', [5, 4], { resid: [[6, 7]] }),
+    T('M12', 2, 'Orthogonal', [4, 4], { orth: [[0, 1]] }),
+    T('M13', 2, 'Orthogonal, five and three', [5, 3], { orth: [[0, 1]] }),
+    T('M14', 2, 'Three by three', [3, 3, 3]),
+    T('M15', 2, 'Three factors, one short', [3, 3, 2]),
+    T('M16', 2, 'Three factors from seven items', [3, 2, 2]),
+
+    // ---------------- level 3: several twists ----------------
+    T('H01', 3, 'Double trouble', [4, 4], { cross: [[3, 1, 1]], resid: [[0, 1]] }),
+    T('H02', 3, 'Cross-loader and a bridge', [5, 4], { cross: [[1, 1, 1]], resid: [[4, 5]] }),
+    T('H03', 3, 'Two cross-loaders', [4, 4], { cross: [[3, 1, 1], [4, 0, 1]] }),
+    T('H04', 3, 'Two pairs of twins', [4, 5], { resid: [[0, 1], [6, 7]] }),
+    T('H05', 3, 'Opposites with a cross-loader', [3, 4], { neg: [[0, 1]], cross: [[2, 1, 1]] }),
+    T('H06', 3, 'Orthogonal with a cross-loader', [4, 4], { orth: [[0, 1]], cross: [[3, 1, 1]] }),
+    T('H07', 3, 'Two method effects', [8], { resid: [[0, 1], [5, 6]] }),
+    T('H08', 3, 'Negative wording', [7], { rev: [5, 6], resid: [[5, 6]] }),
+    T('H09', 3, 'Three with a cross-loader', [3, 3, 3], { cross: [[2, 1, 1]] }),
+    T('H10', 3, 'Three and a bridge', [3, 3, 3], { resid: [[2, 6]] }),
+    T('H11', 3, 'Three, one opposed', [3, 3, 3], { neg: [[0, 2]] }),
+    T('H12', 3, 'Short scale with a cross-loader', [3, 3, 2], { cross: [[5, 2, 1]] }),
+    T('H13', 3, 'Three with twins', [3, 3, 3], { resid: [[3, 4]] }),
+    T('H14', 3, 'Seven items, three factors and a bridge', [3, 2, 2], { resid: [[0, 5]] }),
+    T('H15', 3, 'Odd one out', [3, 3, 3], { orth: [[0, 2], [1, 2]] }),
+    T('H16', 3, 'Final boss', [3, 3, 3], { cross: [[3, 0, 1]], neg: [[0, 2]], resid: [[7, 8]] }),
   ];
 
+  const hasPair = (list, a, b) => list.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   function dims(model) { return { p: model.L.length, m: model.L[0].length }; }
 
-  // Population covariance (= correlation) matrix of a bank model.
-  function populationSigma(model) {
-    const { p, m } = dims(model);
+  function phiMatrix(model) {
+    const m = model.L[0].length;
     const Phi = la.eye(m);
     for (const [a, b, r] of model.phi || []) { Phi[a][b] = r; Phi[b][a] = r; }
-    const Sig = la.mul(la.mul(model.L, Phi), la.transpose(model.L));
+    return Phi;
+  }
+
+  // Population covariance (= correlation) matrix of a model.
+  function populationSigma(model) {
+    const { p } = dims(model);
+    const Sig = la.mul(la.mul(model.L, phiMatrix(model)), la.transpose(model.L));
     for (let i = 0; i < p; i++) Sig[i][i] = 1;
     for (const [i, j, c] of model.resid || []) { Sig[i][j] += c; Sig[j][i] += c; }
     return Sig;
+  }
+
+  // Draw parameter values for a template.
+  function drawModel(t, rnd) {
+    const p = t.sizes.reduce((s, v) => s + v, 0), m = t.sizes.length;
+    const U = (r) => r[0] + (r[1] - r[0]) * rnd();
+    for (let attempt = 0; attempt < 500; attempt++) {
+      const L = la.zeros(p, m);
+      const primary = [];
+      let k = 0;
+      t.sizes.forEach((s, f) => {
+        for (let q = 0; q < s; q++, k++) { L[k][f] = U(RANGES.load) * (t.rev.includes(k) ? -1 : 1); primary.push(f); }
+      });
+      for (const [i, f, s] of t.cross) L[i][f] = s * U(RANGES.cross);
+      const phi = [];
+      for (let a = 0; a < m; a++) for (let b = a + 1; b < m; b++) {
+        if (hasPair(t.orth, a, b)) continue;
+        phi.push([a, b, (hasPair(t.neg, a, b) ? -1 : 1) * U(RANGES.phi)]);
+      }
+      const model = { template: t, id: t.id, level: t.level, name: t.name, L, phi, resid: [], primary };
+      const Phi = phiMatrix(model);
+      const comm = la.mul(la.mul(L, Phi), la.transpose(L)).map((r, i) => r[i]);
+      const theta = comm.map(c => 1 - c);
+      if (theta.some(v => v < RANGES.minTheta)) continue;
+      model.theta = theta;
+      model.resid = t.resid.map(([i, j]) => {
+        const r = U(RANGES.resid);
+        return [i, j, r * Math.sqrt(theta[i] * theta[j]), r];
+      });
+      if (!la.chol(populationSigma(model))) continue;
+      return model;
+    }
+    throw new Error('Could not draw parameters for template ' + t.id);
   }
 
   // Spec (for FF.sem.fit) of the true structure, in original item order.
@@ -138,10 +158,51 @@
     return {
       p: spec.p, m: spec.m,
       loadings: spec.loadings.map(([i, j]) => [pos[i], j]),
-      regressions: spec.regressions.slice(),
-      factorCovs: spec.factorCovs.slice(),
-      residCovs: spec.residCovs.map(([a, b]) => [pos[a], pos[b]]),
+      regressions: (spec.regressions || []).slice(),
+      factorCovs: (spec.factorCovs || []).slice(),
+      residCovs: (spec.residCovs || []).map(([a, b]) => [pos[a], pos[b]]),
     };
+  }
+
+  // Merge factor b into factor a (used to check that every factor is needed).
+  function mergeSpec(spec, a, b) {
+    const map = (f) => (f === b ? a : f > b ? f - 1 : f);
+    const seenL = new Set(), loadings = [];
+    for (const [i, j] of spec.loadings) {
+      const k = i + ',' + map(j);
+      if (!seenL.has(k)) { seenL.add(k); loadings.push([i, map(j)]); }
+    }
+    const seenF = new Set(), factorCovs = [];
+    for (const [x, y] of spec.factorCovs) {
+      const u = map(x), v = map(y);
+      if (u === v) continue;
+      const k = Math.min(u, v) + ',' + Math.max(u, v);
+      if (!seenF.has(k)) { seenF.add(k); factorCovs.push([u, v]); }
+    }
+    return { p: spec.p, m: spec.m - 1, loadings, regressions: [], factorCovs, residCovs: spec.residCovs.slice() };
+  }
+
+  // Simpler versions of the true structure, each missing one feature.
+  function reducedSpecs(model) {
+    const base = trueSpec(model);
+    const t = model.template;
+    const out = [];
+    for (const [i, f] of t.cross) {
+      out.push({ kind: 'cross', item: i, factor: f,
+        spec: Object.assign({}, base, { loadings: base.loadings.filter(([x, y]) => !(x === i && y === f)) }) });
+    }
+    for (const [i, j] of t.resid) {
+      out.push({ kind: 'resid', a: i, b: j,
+        spec: Object.assign({}, base, { residCovs: base.residCovs.filter(([x, y]) => !((x === i && y === j) || (x === j && y === i))) }) });
+    }
+    for (const [a, b] of base.factorCovs) {
+      out.push({ kind: 'phi', a, b,
+        spec: Object.assign({}, base, { factorCovs: base.factorCovs.filter(([x, y]) => !(x === a && y === b)) }) });
+    }
+    for (let a = 0; a < base.m; a++) for (let b = a + 1; b < base.m; b++) {
+      out.push({ kind: 'merge', a, b, spec: mergeSpec(base, a, b) });
+    }
+    return out;
   }
 
   // Simulate N multivariate-normal observations; return the ML covariance
@@ -153,6 +214,7 @@
     const SigPop = populationSigma(model);
     const Sp = perm.map(a => perm.map(b => SigPop[a][b]));
     const C = la.chol(Sp);
+    const mean = new Array(p).fill(0);
     const X = [];
     for (let n = 0; n < N; n++) {
       const z = [];
@@ -160,34 +222,56 @@
       const x = new Array(p).fill(0);
       for (let i = 0; i < p; i++) for (let k = 0; k <= i; k++) x[i] += C[i][k] * z[k];
       X.push(x);
+      for (let i = 0; i < p; i++) mean[i] += x[i] / N;
     }
-    const mean = new Array(p).fill(0);
-    for (const x of X) for (let i = 0; i < p; i++) mean[i] += x[i] / N;
     const S = la.zeros(p, p);
     for (const x of X) for (let i = 0; i < p; i++) for (let j = 0; j <= i; j++)
       S[i][j] += (x[i] - mean[i]) * (x[j] - mean[j]) / N;
     for (let i = 0; i < p; i++) for (let j = 0; j < i; j++) S[j][i] = S[i][j];
     return {
-      model, N, seed, perm, S, R: la.cov2cor(S), X,
+      model, N, seed, perm, S, R: la.cov2cor(S),
       spec: permuteSpec(trueSpec(model), perm),
     };
   }
 
-  // Draw a round's dataset. Samples in which the true model itself does not
-  // fit closely (RMSEA >= .05) or gives an improper solution are redrawn, so
-  // that recovering the true structure always earns full fit points.
-  function makeRound(model, N, seed, opts) {
-    const maxTries = (opts && opts.maxTries) || 60;
-    let last = null;
-    for (let k = 0; k < maxTries; k++) {
-      const d = generate(model, N, (seed + k * 104729) >>> 0, !(opts && opts.shuffle === false));
-      const tf = FF.sem.fit(d.spec, d.S, N);
-      d.trueFit = tf;
-      d.tries = k + 1;
-      last = d;
-      if (tf.ok && tf.converged && !tf.improper && tf.rmsea < 0.05) return d;
+  const usable = (f) => f && f.ok && f.converged && !f.improper;
+
+  // How much worse (in BIC) each one-feature-simpler model is on this sample.
+  function supportOf(d, opts) {
+    const minGap = opts.support;
+    const out = [];
+    for (const r of reducedSpecs(d.model)) {
+      const f = FF.sem.fit(permuteSpec(r.spec, d.perm), d.S, d.N);
+      const dBIC = usable(f) ? f.bic - d.trueFit.bic : Infinity;
+      out.push({ kind: r.kind, dBIC });
+      if (opts.early && dBIC < minGap) break;
     }
-    return last;
+    return out;
+  }
+
+  // Draw a round: parameters + dataset. Draws are repeated until (1) the
+  // true structure fits this sample by every criterion in `opts.accept`
+  // and gives a proper solution, and (2) the sample supports every feature
+  // of the truth: dropping any cross-loading, residual correlation or factor
+  // correlation, or merging two factors, raises BIC by at least
+  // `opts.support`. So the truth is always the best-scoring answer, and
+  // nothing in it is undetectable noise.
+  function makeRound(template, N, seed, opts) {
+    opts = Object.assign({ support: 2, maxTries: 80, accept: (f) => f.rmsea < 0.05, shuffle: true, early: true }, opts || {});
+    const rnd = la.rng(seed);
+    let fallback = null;
+    for (let k = 0; k < opts.maxTries; k++) {
+      const model = drawModel(template, rnd);
+      const d = generate(model, N, Math.floor(rnd() * 4294967296) >>> 0, opts.shuffle);
+      d.trueFit = FF.sem.fit(d.spec, d.S, N);
+      d.tries = k + 1;
+      if (!usable(d.trueFit) || !opts.accept(d.trueFit)) { if (!fallback) fallback = d; continue; }
+      d.support = supportOf(d, opts);
+      fallback = d;
+      if (d.support.every(s => s.dBIC >= opts.support)) { d.accepted = true; return d; }
+    }
+    fallback.accepted = false;
+    return fallback;
   }
 
   // True population values in the format of FF.sem.fit()'s `est`, in
@@ -196,10 +280,7 @@
     const { p, m } = dims(model);
     const pos = new Array(p);
     perm.forEach((orig, k) => { pos[orig] = k; });
-    const Phi = la.eye(m);
-    for (const [a, b, r] of model.phi || []) { Phi[a][b] = r; Phi[b][a] = r; }
-    const comm = la.mul(la.mul(model.L, Phi), la.transpose(model.L)).map((r, i) => r[i]);
-    const theta = comm.map(c => 1 - c);
+    const theta = model.theta;
     const est = [];
     for (let i = 0; i < p; i++) for (let j = 0; j < m; j++)
       if (model.L[i][j] !== 0) est.push({ mat: 'L', r: pos[i], c: j, std: model.L[i][j] });
@@ -211,5 +292,142 @@
     return { est };
   }
 
-  FF.bank = { MODELS, dims, populationSigma, trueSpec, permuteSpec, generate, makeRound, trueEst };
+  // ------------------------------------------------------------------
+  // Plain-language description of the true model (displayed numbering).
+  // ------------------------------------------------------------------
+  const LETTERS = 'ABCDEFGHI';
+  const NOTES = {
+    rev: 'A <b>reverse-keyed</b> item loads negatively: agreeing with it means a lower factor score, so it correlates negatively with the other items.',
+    cross: 'A <b>cross-loading</b> item measures two factors at once, so it correlates with both groups of items.',
+    resid: 'A <b>residual correlation</b> means two items share something beyond their factor, such as similar wording (a method effect).',
+    neg: '<b>Negatively correlated factors</b> produce a block of negative correlations between their items.',
+    orth: '<b>Uncorrelated factors</b> split the correlation matrix into separate blocks. Drawing a factor correlation there adds a parameter the data do not need.',
+    short: 'A factor with only <b>two items</b> is identified only through its correlations with the other factors.',
+  };
+  const f2 = (v) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2).replace(/^0/, '');
+  const list = (xs) => xs.length <= 1 ? String(xs[0]) : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1];
+
+  function describe(model, perm) {
+    const t = model.template;
+    const { p, m } = dims(model);
+    const pos = new Array(p);
+    perm.forEach((orig, k) => { pos[orig] = k; });
+    const num = (i) => pos[i] + 1;
+    const lines = [];
+    const groups = [];
+    for (let f = 0; f < m; f++) {
+      const its = [];
+      for (let i = 0; i < p; i++) if (model.primary[i] === f) its.push(i);
+      groups.push(its);
+      const shown = its.map(num).sort((a, b) => a - b);
+      const rev = its.filter(i => t.rev.includes(i)).map(num).sort((a, b) => a - b);
+      let s = (m === 1 ? 'One factor' : 'Factor ' + LETTERS[f]) + ': items ' + list(shown);
+      if (rev.length) s += rev.length === 1 ? ` (item ${rev[0]} reverse-keyed)` : ` (items ${list(rev)} reverse-keyed)`;
+      lines.push(s);
+    }
+    for (const [i, f] of t.cross) lines.push(`Item ${num(i)} also loads on factor ${LETTERS[f]} (${f2(model.L[i][f])})`);
+    for (let a = 0; a < m; a++) for (let b = a + 1; b < m; b++) {
+      const e = model.phi.find(([x, y]) => x === a && y === b);
+      lines.push(e ? `Factors ${LETTERS[a]} and ${LETTERS[b]} correlate ${f2(e[2])}` : `Factors ${LETTERS[a]} and ${LETTERS[b]} are uncorrelated`);
+    }
+    for (const [i, j, , r] of model.resid) {
+      const [x, y] = [num(i), num(j)].sort((a, b) => a - b);
+      lines.push(`Items ${x} and ${y} share a residual correlation (${f2(r)})`);
+    }
+    const notes = [];
+    if (t.rev.length) notes.push(NOTES.rev);
+    if (t.cross.length) notes.push(NOTES.cross);
+    if (t.resid.length) notes.push(NOTES.resid);
+    if (t.neg.length) notes.push(NOTES.neg);
+    if (t.orth.length) notes.push(NOTES.orth);
+    if (t.sizes.some(s => s === 2)) notes.push(NOTES.short);
+    return { name: t.name, level: t.level, lines, notes };
+  }
+
+  // ------------------------------------------------------------------
+  // Compare the player's structure with the truth (both in displayed item
+  // order). Player factors are matched to true factors by their shared
+  // items. Returns found / missed / extra features.
+  // ------------------------------------------------------------------
+  function compareStructure(ts, ps) {
+    const mt = ts.m, mp = ps.m;
+    const setsT = [...Array(mt)].map((_, j) => new Set(ts.loadings.filter(l => l[1] === j).map(l => l[0])));
+    const setsP = [...Array(mp)].map((_, k) => new Set(ps.loadings.filter(l => l[1] === k).map(l => l[0])));
+    let best = new Array(mt).fill(-1), bestScore = -1;
+    const assign = new Array(mt).fill(-1), used = new Set();
+    (function rec(j, score) {
+      if (j === mt) { if (score > bestScore) { bestScore = score; best = assign.slice(); } return; }
+      assign[j] = -1; rec(j + 1, score);
+      for (let k = 0; k < mp; k++) {
+        if (used.has(k)) continue;
+        let ov = 0; for (const i of setsT[j]) if (setsP[k].has(i)) ov++;
+        if (!ov) continue;
+        used.add(k); assign[j] = k; rec(j + 1, score + ov); used.delete(k); assign[j] = -1;
+      }
+    })(0, 0);
+    const inv = new Array(mp).fill(-1);
+    best.forEach((k, j) => { if (k >= 0) inv[k] = j; });
+    const L = (j) => LETTERS[j];
+    const items = (set) => [...set].map(i => i + 1).sort((a, b) => a - b);
+    const out = { found: [], missed: [], extra: [], counts: {} };
+    const pairKey = (a, b) => Math.min(a, b) + ',' + Math.max(a, b);
+
+    // factors
+    for (let j = 0; j < mt; j++) {
+      if (best[j] < 0) out.missed.push({ kind: 'factor', text: (mt === 1 ? 'The factor' : 'Factor ' + L(j)) + ' (items ' + list(items(setsT[j])) + ')' });
+    }
+    for (let k = 0; k < mp; k++) {
+      if (inv[k] < 0) out.extra.push({ kind: 'factor', text: setsP[k].size ? 'An extra factor (items ' + list(items(setsP[k])) + ')' : 'An extra factor without items' });
+    }
+    // loadings
+    const pl = new Set(ps.loadings.map(([i, k]) => i + ',' + k));
+    let nf = 0;
+    for (const [i, j] of ts.loadings) {
+      const k = best[j];
+      if (k >= 0 && pl.has(i + ',' + k)) nf++;
+      else if (k >= 0) out.missed.push({ kind: 'load', text: `Loading of item ${i + 1} on ${mt === 1 ? 'the factor' : 'factor ' + L(j)}` });
+    }
+    out.counts.load = [nf, ts.loadings.length];
+    const tl = new Set(ts.loadings.map(([i, j]) => i + ',' + j));
+    for (const [i, k] of ps.loadings) {
+      const j = inv[k];
+      if (j >= 0 && !tl.has(i + ',' + j)) out.extra.push({ kind: 'load', text: `Loading of item ${i + 1} on ${mt === 1 ? 'the factor' : 'factor ' + L(j)}` });
+    }
+    // factor correlations (a regression between two factors counts as an association)
+    const pf = new Set(ps.factorCovs.map(([a, b]) => pairKey(a, b)).concat((ps.regressions || []).map(([a, b]) => pairKey(a, b))));
+    const tf = new Set(ts.factorCovs.map(([a, b]) => pairKey(a, b)));
+    let ff = 0;
+    for (let a = 0; a < mt; a++) for (let b = a + 1; b < mt; b++) {
+      const inTruth = tf.has(pairKey(a, b));
+      const ka = best[a], kb = best[b];
+      if (ka < 0 || kb < 0) continue;
+      const inPlayer = pf.has(pairKey(ka, kb));
+      if (inTruth && inPlayer) ff++;
+      else if (inTruth) out.missed.push({ kind: 'phi', text: `Correlation between factors ${L(a)} and ${L(b)}` });
+      else if (inPlayer) out.extra.push({ kind: 'phi', text: `Correlation between factors ${L(a)} and ${L(b)} (they are uncorrelated)` });
+    }
+    out.counts.phi = [ff, ts.factorCovs.length];
+    // residual correlations
+    const pr = new Set(ps.residCovs.map(([a, b]) => pairKey(a, b)));
+    const tr = new Set(ts.residCovs.map(([a, b]) => pairKey(a, b)));
+    let rf = 0;
+    for (const k of tr) {
+      const [a, b] = k.split(',').map(Number);
+      if (pr.has(k)) rf++; else out.missed.push({ kind: 'resid', text: `Residual correlation between items ${a + 1} and ${b + 1}` });
+    }
+    for (const k of pr) {
+      if (tr.has(k)) continue;
+      const [a, b] = k.split(',').map(Number);
+      out.extra.push({ kind: 'resid', text: `Residual correlation between items ${a + 1} and ${b + 1}` });
+    }
+    out.counts.resid = [rf, ts.residCovs.length];
+    out.exact = !out.missed.length && !out.extra.length;
+    out.map = best;
+    return out;
+  }
+
+  FF.bank = {
+    TEMPLATES, RANGES, LETTERS, dims, populationSigma, drawModel, trueSpec, permuteSpec, mergeSpec,
+    reducedSpecs, generate, makeRound, trueEst, describe, compareStructure,
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

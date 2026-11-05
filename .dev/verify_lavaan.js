@@ -45,19 +45,21 @@ function lavName(spec, q) {
   return y(Math.min(q.r, q.c)) + '~~' + y(Math.max(q.r, q.c));
 }
 
+const Ns = [150, 200, 250, 300, 400, 500];
 const cases = [];
 let k = 0, notId = 0, noConv = 0;
-for (const model of FF.bank.MODELS) {
+for (const tpl of FF.bank.TEMPLATES) {
   for (let r = 0; r < per; r++) {
-    const d = FF.bank.makeRound(model, 200, 5000 + 31 * k + r);
+    const N = Ns[rnd.int(Ns.length)];
+    const d = FF.bank.makeRound(tpl, N, 5000 + 31 * k + r);
     const spec = r === 0 ? d.spec : randomSpec(d.S.length);
-    const res = FF.sem.fit(spec, d.S, 200);
+    const res = FF.sem.fit(spec, d.S, N);
     if (!res.ok) { notId++; continue; }
     if (!res.converged) { noConv++; continue; }
-    fs.writeFileSync(path.join(out, `lav_case_${k}.R`), FF.sem.rCode(spec, d.S, 200, res) + '\n');
+    fs.writeFileSync(path.join(out, `lav_case_${k}.R`), FF.sem.rCode(spec, d.S, N, res) + '\n');
     const std = {};
     res.est.forEach(e => { std[lavName(spec, e)] = e.std; });
-    cases.push({ k, model: model.id, chisq: res.chisq, df: res.df, rmsea: res.rmsea, cfi: res.cfi, tli: res.tli, srmr: res.srmr, bic: res.bic, improper: res.improper, std });
+    cases.push({ k, model: tpl.id, N, chisq: res.chisq, df: res.df, rmsea: res.rmsea, cfi: res.cfi, tli: res.tli, srmr: res.srmr, bic: res.bic, improper: res.improper, std });
     k++;
   }
 }
