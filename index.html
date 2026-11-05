@@ -52,7 +52,7 @@
         <figure class="panel" data-p="scree"><figcaption>Scree plot</figcaption><svg class="plot"></svg></figure>
         <figure class="panel" data-p="heat"><figcaption>Correlations</figcaption><svg class="plot"></svg></figure>
         <figure class="panel" data-p="net"><figcaption>Correlation network</figcaption><svg class="plot"></svg></figure>
-        <figure class="panel" data-p="pcor"><figcaption>Partial correlation network</figcaption><svg class="plot"></svg></figure>
+        <figure class="panel" data-p="pcor"><figcaption>Regularized partial correlation network</figcaption><svg class="plot"></svg></figure>
       </div>
       <div class="readout">Hover a cell, line or point to see its value.</div>
     </section>
@@ -106,7 +106,7 @@
           <figure class="panel" data-p="scree"><figcaption>Scree plot</figcaption><svg class="plot"></svg></figure>
           <figure class="panel" data-p="heat"><figcaption>Model-implied correlations</figcaption><svg class="plot"></svg></figure>
           <figure class="panel" data-p="net"><figcaption>Model-implied network</figcaption><svg class="plot"></svg></figure>
-          <figure class="panel" data-p="pcor"><figcaption>Model-implied partial correlations</figcaption><svg class="plot"></svg></figure>
+          <figure class="panel" data-p="pcor"><figcaption>Model-implied regularized network</figcaption><svg class="plot"></svg></figure>
         </div>
         <div class="readout">Hover a cell, line or point to compare data and model.</div>
       </div>
@@ -268,6 +268,7 @@
 <div id="tip" class="tip" role="tooltip"></div>
 
 <script src="linalg.js"></script>
+<script src="glasso.js"></script>
 <script src="sem.js"></script>
 <script src="bank.js"></script>
 <script src="plots.js"></script>

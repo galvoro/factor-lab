@@ -14,6 +14,7 @@ LEARN mode is not built yet (button shows "coming soon").
 | File | Role |
 |---|---|
 | `linalg.js` | small matrix helpers, Jacobi eigen, chi-square tail, seeded RNG |
+| `glasso.js` | graphical lasso + EBIC model selection (as `qgraph::EBICglasso`, gamma 0.5), written from the published algorithm; used for the regularized partial correlation networks (data and model-implied) |
 | `sem.js` | ML estimation (Fisher scoring, std.lv identification), fit indices, identification check, lavaan export |
 | `bank.js` | 48 structure templates (levels 1–3), random parameter draws (`RANGES`), data simulation, plain-language description and structure comparison |
 | `plots.js` | qgraph-style scree / heatmap / networks; `springLayout` is a port of qgraph's Fruchterman–Reingold |
@@ -53,6 +54,9 @@ So the true structure always scores 100, and nothing in it is undetectable.
   player models vs lavaan (last run: 126 models, χ² within .0013, BIC within
   .0034, RMSEA/CFI/TLI/SRMR within 2e-6; standardized estimates differ only for
   improper solutions, which the game rejects).
+* `node .dev/verify_glasso.js 4 && Rscript .dev/verify_glasso.R` — EBICglasso
+  vs `qgraph::EBICglasso` (last run: 192 datasets, networks within .0013,
+  one tiny edge differing in one case; model-implied matrices within .0001).
 * `node .dev/verify_rcode.js` — the in-game "Check in R" code reproduces the fit.
 * `node .dev/smoke_full_game.js [baseURL]` — plays three games in headless
   Chrome (serve the folder on port 8765 first, or pass a URL).

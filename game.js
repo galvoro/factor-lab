@@ -202,7 +202,9 @@
     if (!c || !c.fit) return null;
     if (!c.fit.dash) {
       const Rm = c.fit.res.impliedCor;
-      c.fit.dash = { R: Rm, P: la.partialCor(Rm), ev: la.eigSym(Rm).values };
+      // the same EBICglasso on the model-implied correlations, so data and
+      // model networks go through the same filter
+      c.fit.dash = { R: Rm, P: la.partialCor(Rm), G: FF.glasso.ebicGlasso(Rm, c.N).net, ev: la.eigSym(Rm).values };
     }
     return c.fit.dash;
   }
@@ -214,7 +216,7 @@
     P.scree(DD.svg('scree'), [{ values: d.ev, color: '#20252C', label: 'data' }], { onHover: hover('scree') });
     P.heatmap(DD.svg('heat'), d.R, { maximum: 1, onHover: hover('cor') });
     P.network(DD.svg('net'), d.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
-    P.network(DD.svg('pcor'), d.P, d.layout, { maximum: d.maxP, onHover: hover('pcor') });
+    P.network(DD.svg('pcor'), d.G, d.layout, { maximum: d.maxG, onHover: hover('gpcor') });
     applyHighlight(hlSet(), HL.pair);
   }
 
@@ -232,8 +234,8 @@
       P.heatmap(MD.svg('heat'), m.R, { maximum: 1, onHover: hover('cor') });
       MD.cap('net', 'Model-implied network');
       P.network(MD.svg('net'), m.R, d.layout, { maximum: d.maxR, onHover: hover('cor') });
-      MD.cap('pcor', 'Model-implied partial correlations');
-      P.network(MD.svg('pcor'), m.P, d.layout, { maximum: d.maxP, onHover: hover('pcor') });
+      MD.cap('pcor', 'Model-implied regularized network');
+      P.network(MD.svg('pcor'), m.G, d.layout, { maximum: d.maxG, onHover: hover('gpcor') });
     } else {
       const RM = CONFIG.RESID_MAX, RP = CONFIG.RESID_MAX_P;
       const sc = (v) => '· scale ±' + v.toFixed(2).replace(/^0/, '');
@@ -308,12 +310,13 @@
       return;
     }
     const i = Math.min(h.i, h.j), j = Math.max(h.i, h.j);
-    const name = kind === 'pcor' ? 'Partial correlation' : 'Correlation';
-    const D = kind === 'pcor' ? c.dash.P : c.dash.R;
+    const name = kind === 'gpcor' ? 'Regularized partial correlation' : kind === 'pcor' ? 'Partial correlation' : 'Correlation';
+    const pick = (o) => (kind === 'gpcor' ? o.G : kind === 'pcor' ? o.P : o.R);
+    const D = pick(c.dash);
     const v = D[i][j];
     let s = `<div class="tt-h">${name} ${i + 1}–${j + 1}</div>` + tipRow('data', f2(v), cls(v));
     if (m) {
-      const M = kind === 'pcor' ? m.P : m.R;
+      const M = pick(m);
       s += tipRow('model', f2(M[i][j]), cls(M[i][j])) + tipRow('residual', sgn(v - M[i][j]), 'resid');
     }
     showTip(s, ev);
@@ -472,9 +475,10 @@
       generating = false;
       fitBtn.disabled = false;
       const R = data.R, Pc = la.partialCor(R);
+      const Gc = FF.glasso.ebicGlasso(R, N).net;     // regularized partial correlations
       G.cur = {
         k, seed, tpl, N, data, model: data.model, p: data.model.L.length,
-        dash: { R, P: Pc, ev: la.eigSym(R).values, layout: P.springLayout(R), maxR: offMax(R), maxP: offMax(Pc) },
+        dash: { R, P: Pc, G: Gc, ev: la.eigSym(R).values, layout: P.springLayout(R), maxR: offMax(R), maxP: offMax(Pc), maxG: offMax(Gc) },
         fit: null, attempts: 0,
       };
       $('dash-note').textContent = `N = ${N} · ${G.cur.p} items`;
