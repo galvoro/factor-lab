@@ -1,4 +1,4 @@
-// FACTOR FIND — game orchestrator: datasets, dashboards, the single fit,
+// FACTOR LAB — game orchestrator: datasets, dashboards, the single fit,
 // scoring card, true-model reveal. Exposes FF.game (state) for debugging.
 (function (global) {
   'use strict';
@@ -256,13 +256,13 @@
     dark: '<svg viewBox="0 0 24 24" class="th-icon"><path class="th-half" d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg>',
   };
   let theme = 'auto';
-  try { const s = global.localStorage.getItem('factorfind-theme'); if (THEMES.includes(s)) theme = s; } catch (e) { /* storage unavailable */ }
+  try { const s = global.localStorage.getItem('factorlab-theme'); if (THEMES.includes(s)) theme = s; } catch (e) { /* storage unavailable */ }
   function applyTheme(t) {
     theme = t;
     document.documentElement.dataset.theme = t;
     $('btn-theme').innerHTML = THEME_ICON[t];
     $('btn-theme').title = 'Theme: ' + t + ' (click to change)';
-    try { global.localStorage.setItem('factorfind-theme', t); } catch (e) { /* ignore */ }
+    try { global.localStorage.setItem('factorlab-theme', t); } catch (e) { /* ignore */ }
   }
   applyTheme(theme);
   $('btn-theme').addEventListener('click', () => {
@@ -1434,7 +1434,7 @@
   function triggerDownload() {
     if (!saveURL) return;
     const a = document.createElement('a');
-    a.href = saveURL; a.download = 'factor-find-diploma.png';
+    a.href = saveURL; a.download = 'factor-lab-diploma.png';
     document.body.appendChild(a); a.click(); a.remove();
   }
   $('btn-save-img').addEventListener('click', () => {

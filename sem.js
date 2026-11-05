@@ -1,4 +1,4 @@
-// FACTOR FIND — maximum-likelihood factor-model estimation.
+// FACTOR LAB — maximum-likelihood factor-model estimation.
 //
 // Model (LISREL all-y / psychonetrics lvm):
 //   Sigma = Lambda (I - B)^-1 Psi (I - B)^-T Lambda' + Theta

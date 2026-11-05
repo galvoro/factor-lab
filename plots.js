@@ -1,4 +1,4 @@
-// FACTOR FIND — dashboard plots drawn as SVG, styled after qgraph
+// FACTOR LAB — dashboard plots drawn as SVG, styled after qgraph
 // (theme = "colorblind", cut = 0): scree plot, correlation heatmap,
 // correlation network and partial-correlation network.
 (function (global) {

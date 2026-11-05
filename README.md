@@ -1,4 +1,4 @@
-# FACTOR FIND (working title)
+# FACTOR LAB
 
 PLAY/LEARN Galvoro capsule for PL5225 Structural Equation Modeling. A game is
 five datasets at one level (Easy / Medium / Hard / Psychometrika), each
@@ -42,6 +42,13 @@ model as lavaan syntax (LEARN: population syntax with values). Factors carry
 subtle F1, F2 labels matching the console. Light / dark / auto theme (HUD button,
 remembered in localStorage); plots, the canvas and the true-model diagram stay
 on white in every theme (`.panel, .canvas-wrap, .truth-fig` reset the tokens).
+
+## Key art
+
+`node .dev/make_art.js && node .dev/render_cover.js` regenerates the flask
+illustration (vector, drawn by the script) inline on the title screen and
+renders `cover.png` (1254 x 1254, the Galvoro square cover; a copy goes to
+`~/GitHub_galvoro/squareimg/` for the upload script).
 
 ## Datasets
 

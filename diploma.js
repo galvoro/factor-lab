@@ -1,4 +1,4 @@
-// FACTOR FIND — the diploma drawn on a canvas (for "Save as image").
+// FACTOR LAB — the diploma drawn on a canvas (for "Save as image").
 // Drawn with the 2D canvas API (no DOM screenshot, no SVG images), so it
 // works under the capsule CSP and never taints the canvas.
 // FF.diploma.render(info) -> Promise<HTMLCanvasElement>
@@ -83,7 +83,7 @@
     const cx = W / 2;
     ctx.textAlign = 'center';
     ctx.font = `600 22px ${HEAD}`; ctx.fillStyle = '#8A6A2E'; spaced(ctx, 6);
-    ctx.fillText('FACTOR FIND · STRUCTURAL EQUATION MODELING', cx, 112);
+    ctx.fillText('FACTOR LAB · STRUCTURAL EQUATION MODELING', cx, 112);
     spaced(ctx, 0);
     ctx.font = `700 132px ${SERIF}`; ctx.fillStyle = '#3E2F17';
     ctx.fillText('Diploma', cx, 232);

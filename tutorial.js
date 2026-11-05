@@ -1,4 +1,4 @@
-// FACTOR FIND — briefing cards (intro before the first round, and the
+// FACTOR LAB — briefing cards (intro before the first round, and the
 // "?" popup during play). Exposes FF.tutorial.
 (function (global) {
   'use strict';

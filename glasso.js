@@ -1,4 +1,4 @@
-// FACTOR FIND — regularized partial correlations (EBICglasso).
+// FACTOR LAB — regularized partial correlations (EBICglasso).
 //
 // Written from the published algorithms, not from the glasso Fortran:
 //   * graphical lasso: block coordinate descent of Friedman, Hastie &

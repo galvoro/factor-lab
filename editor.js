@@ -1,4 +1,4 @@
-// FACTOR FIND — path-diagram editor (SVG).
+// FACTOR LAB — path-diagram editor (SVG).
 //
 // Items are squares labelled 1..p, factors are unlabelled circles.
 //   load : factor -> item     (factor loading)

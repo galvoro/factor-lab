@@ -1,4 +1,4 @@
-// FACTOR FIND — small dense linear-algebra helpers (matrices are arrays of rows).
+// FACTOR LAB — small dense linear-algebra helpers (matrices are arrays of rows).
 // Sizes in this capsule are tiny (≤ 9 observed, ≤ ~45 parameters), so clarity
 // beats speed. Exposed as FF.la.
 (function (global) {

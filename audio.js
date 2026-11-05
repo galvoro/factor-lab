@@ -1,4 +1,4 @@
-// FACTOR FIND — audio module.
+// FACTOR LAB — audio module.
 //
 // WebAudio synth SFX + HTMLAudio BGM. Exposes window.GaltonAudio
 // (shared name convention across Galvoro Capsules so a future

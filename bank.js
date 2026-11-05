@@ -1,4 +1,4 @@
-// FACTOR FIND — bank of true (data-generating) factor-model structures.
+// FACTOR LAB — bank of true (data-generating) factor-model structures.
 //
 // Each round picks a structure template and draws fresh parameter values
 // from RANGES, so no two datasets are alike. Everything is in the
