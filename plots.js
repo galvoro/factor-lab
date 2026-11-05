@@ -36,7 +36,12 @@
   // ------------------------------------------------------------------
   function fround(x, d) { const f = Math.pow(10, d); return Math.round(x * f) / f; }
 
-  function springLayout(W) {
+  // opts: { init: raw positions to start from (warm start), niter, maxdelta,
+  //         nref: node count used for the force constants (default n),
+  //         pinned: nodes that keep their position }
+  // returns raw (unscaled) positions; springLayout() = qgraph defaults + rescale
+  function springRaw(W, opts) {
+    opts = opts || {};
     const n = W.length;
     const Ef = [], Et = [], Wt = [];
     let maxW = 0;
@@ -45,13 +50,15 @@
       if (W[i][j] !== 0) { Ef.push(i); Et.push(j); Wt.push(W[i][j]); maxW = Math.max(maxW, Math.abs(W[i][j])); }
     }
     const weights = Wt.map(w => fround(Math.pow(Math.abs(w / maxW), 2), 5));
-    const niter = 500, area = n * n, coolexp = 1.5, repulserad = Math.pow(n, 3), maxdelta = n;
+    const nr = opts.nref || n;
+    const niter = opts.niter || 500, area = nr * nr, coolexp = 1.5, repulserad = Math.pow(nr, 3);
+    const maxdelta = opts.maxdelta || nr;
     const x = [], y = [];
     for (let i = 0; i < n; i++) {
-      x.push(fround(Math.sin(2 * Math.PI * i / n), 5));
-      y.push(fround(Math.cos(2 * Math.PI * i / n), 5));
+      if (opts.init) { x.push(opts.init[i][0]); y.push(opts.init[i][1]); }
+      else { x.push(fround(Math.sin(2 * Math.PI * i / n), 5)); y.push(fround(Math.cos(2 * Math.PI * i / n), 5)); }
     }
-    const frk = Math.sqrt(area / n);
+    const frk = Math.sqrt(area / nr);
     const dx = new Array(n), dy = new Array(n);
     const m = Ef.length;
     for (let it = niter; it >= 0; it--) {
@@ -60,7 +67,7 @@
       for (let j = 0; j < n; j++) {
         for (let k = j + 1; k < n; k++) {
           let xd = x[j] - x[k], yd = y[j] - y[k];
-          const ded = Math.sqrt(xd * xd + yd * yd);
+          const ded = Math.sqrt(xd * xd + yd * yd) || 1e-6;
           xd /= ded; yd /= ded;
           const rf = frk * frk * (1 / ded - ded * ded / repulserad);
           dx[j] += xd * rf; dx[k] -= xd * rf;
@@ -77,13 +84,25 @@
         dy[k] -= yd * af; dy[l] += yd * af;
       }
       for (let j = 0; j < n; j++) {
+        if (opts.pinned && opts.pinned[j]) continue;
         let ded = Math.sqrt(dx[j] * dx[j] + dy[j] * dy[j]);
         if (ded > t) { ded = t / ded; dx[j] *= ded; dy[j] *= ded; }
         x[j] += fround(dx[j], 5);
         y[j] += fround(dy[j], 5);
       }
     }
-    return rescale(x.map((xi, i) => [xi, y[i]]));
+    return x.map((xi, i) => [xi, y[i]]);
+  }
+  function springLayout(W) { return rescale(springRaw(W)); }
+
+  // LEARN: continue the same force layout from the current (raw) positions,
+  // so nodes only move as far as the new weights push them. Not identical to
+  // qgraph's from-scratch layout.
+  // nref keeps the force constants fixed when items are added or removed.
+  function springLayoutWarm(W, initRaw, nref, pinned) {
+    const nr = nref || W.length;
+    const raw = springRaw(W, { init: initRaw, niter: 300, maxdelta: 0.3 * nr, nref: nr, pinned });
+    return { raw, layout: rescale(raw) };
   }
   function rescale(L) {
     const xs = L.map(p => p[0]), ys = L.map(p => p[1]);
@@ -277,5 +296,5 @@
     }
   }
 
-  FF.plots = { POS, NEG, fade, weightColor, springLayout, network, heatmap, scree, fmt2, el, clear };
+  FF.plots = { POS, NEG, fade, weightColor, springLayout, springRaw, springLayoutWarm, rescale, network, heatmap, scree, fmt2, el, clear };
 })(typeof window !== 'undefined' ? window : globalThis);

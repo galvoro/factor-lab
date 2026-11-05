@@ -811,7 +811,8 @@
       S.obs = S.obs.filter(o => !gone.has(o.id));
       S.edges = S.edges.filter(e => !gone.has(e.a) && !gone.has(e.b));
       const map = {};
-      S.obs.sort((a, b) => a.idx - b.idx).forEach((o, k) => { map[o.id] = 'o' + k; o.idx = k; });
+      S.lastRemap = [];                                  // new index -> old index (for the LEARN layout)
+      S.obs.sort((a, b) => a.idx - b.idx).forEach((o, k) => { map[o.id] = 'o' + k; S.lastRemap[k] = o.idx; o.idx = k; });
       S.obs.forEach(o => { o.id = map[o.id]; });
       S.edges.forEach(e => { if (map[e.a]) e.a = map[e.a]; if (map[e.b]) e.b = map[e.b]; });
       S.sel.clear();
@@ -958,6 +959,7 @@
       get edges() { return S.edges.map(x => Object.assign({}, x)); },
       get picking() { return !!pick; },
       addObs, removeObs, getValue, setValue, setLearn, DEFAULTS,
+      takeRemap() { const r = S.lastRemap || null; S.lastRemap = null; return r; },
       set labelMode(m) { S.labelMode = m; render(); },
       get itemCount() { return S.obs.length; },
       clearSelection() { S.sel.clear(); render(); },

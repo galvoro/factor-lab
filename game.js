@@ -441,7 +441,7 @@
     setMode('learn');
     setPhase('build');
     G.cur = { learn: true, p: 6, dash: null };
-    G.learnLayout = null;
+    G.learnLayout = null; G.learnRaw = null;
     editor.reset(6);
     editor.setTool('select');
     $('canvas-hint').classList.remove('gone');
@@ -466,9 +466,9 @@
       const R = ev.impliedCor, Pc = la.partialCor(R);
       const same = G.learnLayout && G.learnLayout.length === R.length;
       if (relayout || !same) {
-        // new qgraph layout, turned / mirrored to sit as close as possible to the old one
-        target = alignLayout(P.springLayout(R), G.learnLayout);
-        if (!same) { G.learnLayout = target; target = null; }
+        const next = learnLayout(R);
+        if (same) target = next.layout;
+        else { G.learnLayout = next.from; target = next.layout; }
       }
       G.cur.dash = { R, P: Pc, G: Pc, ev: la.eigSym(R).values, layout: G.learnLayout, maxR: 1, maxP: 1, maxG: 1 };
     } else if (!G.cur.dash || G.cur.dash.R.length !== spec.p) {
@@ -484,34 +484,43 @@
     if (target) glideLayout(target);
   }
 
-  // Rotate / mirror layout `next` (orthogonal Procrustes on the items both
-  // layouts share) so it lines up with `prev`; then rescale each axis to [-1, 1]
-  // like qgraph does.
-  function alignLayout(next, prev) {
-    if (!prev) return next;
-    const n = Math.min(next.length, prev.length);
-    if (n < 2) return next;
-    let ax = 0, ay = 0, bx = 0, by = 0;
-    for (let i = 0; i < n; i++) { ax += next[i][0]; ay += next[i][1]; bx += prev[i][0]; by += prev[i][1]; }
-    ax /= n; ay /= n; bx /= n; by /= n;
-    const best = (flip) => {
-      let s1 = 0, s2 = 0;
-      for (let i = 0; i < n; i++) {
-        const x = next[i][0] - ax, y = (next[i][1] - ay) * (flip ? -1 : 1), u = prev[i][0] - bx, v = prev[i][1] - by;
-        s1 += x * u + y * v; s2 += x * v - y * u;
+  // Network layout in LEARN: the same force layout as qgraph, but continued
+  // from the current node positions (warm start), so nodes only move as far
+  // as the new correlations push them. Items keep their place when another
+  // item is removed; a new item starts at the rim. Returns the new layout and
+  // the layout to glide from (same length).
+  function learnLayout(R) {
+    const n = R.length, prevRaw = G.learnRaw, prev = G.learnLayout;
+    const remap = editor.takeRemap();
+    let init = null, from = null, pinned = null, keep = false;
+    if (prevRaw && remap && remap.length === n) {                 // items removed: the rest stay put
+      init = remap.map(k => prevRaw[k]); from = remap.map(k => prev[k]); keep = true;
+    } else if (prevRaw && prevRaw.length === n) {                  // same items
+      init = prevRaw; from = prev;
+    } else if (prevRaw && prevRaw.length < n) {                    // items added
+      // put each new item in the emptiest spot inside the current picture
+      init = prevRaw.slice();
+      const xs = init.map(p => p[0]), ys = init.map(p => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      for (let i = prevRaw.length; i < n; i++) {
+        let best = null, bd = -1;
+        for (let a = 0; a <= 12; a++) for (let b = 0; b <= 12; b++) {
+          const px = x0 + (x1 - x0) * a / 12, py = y0 + (y1 - y0) * b / 12;
+          const d = Math.min(...init.map(([x, y]) => Math.hypot(x - px, y - py)));
+          if (d > bd) { bd = d; best = [px, py]; }
+        }
+        init.push(best || [x0, y0]);
       }
-      return { flip, th: Math.atan2(s2, s1), score: Math.hypot(s1, s2) };
-    };
-    const a = best(false), b = best(true), t = b.score > a.score + 1e-9 ? b : a;
-    const c = Math.cos(t.th), s = Math.sin(t.th);
-    const out = next.map(([x0, y0]) => {
-      const x = x0 - ax, y = (y0 - ay) * (t.flip ? -1 : 1);
-      return [x * c - y * s, x * s + y * c];
-    });
-    const xs = out.map(p => p[0]), ys = out.map(p => p[1]);
-    const rx = [Math.min(...xs), Math.max(...xs)], ry = [Math.min(...ys), Math.max(...ys)];
-    const sc = (v, r) => (r[1] - r[0] > 1e-12 ? (v - r[0]) / (r[1] - r[0]) * 2 - 1 : 0);
-    return out.map(([x, y]) => [sc(x, rx), sc(y, ry)]);
+      pinned = init.map((_, i) => i < prevRaw.length);                // only the new items move
+    }
+    let res;
+    if (init && keep) res = { raw: init, layout: P.rescale(init) };
+    else if (init) res = P.springLayoutWarm(R, init, G.learnNref, pinned);
+    else { const raw = P.springRaw(R); res = { raw, layout: P.rescale(raw) }; G.learnNref = n; }
+    G.learnRaw = res.raw;
+    if (!from) from = res.layout;
+    else if (from.length < n) from = from.concat(res.layout.slice(from.length));
+    return { layout: res.layout, from };
   }
   // nodes glide from the current to the new layout
   let glide = null;
@@ -1433,5 +1442,5 @@
 
   updateHUD();
   FF.game.CONFIG = CONFIG;
-  FF.game.debug = { startGame, startRound, editor, truthView, scoreFit, skipSeq, showScoreCard, showError, openTruth, acceptTrue, afterRound, showFinal };
+  FF.game.debug = { startGame, startRound, editor, truthView, scoreFit, skipSeq, showScoreCard, showError, openTruth, acceptTrue, afterRound, showFinal, learnUpdate };
 })(window);
