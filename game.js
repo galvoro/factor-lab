@@ -463,6 +463,9 @@
 
     hideCard(true);
     closeModal('modal-truth');
+    pane.classList.remove('revealing');
+    fitBtn.classList.remove('busy');
+    busy = false;
     Object.assign(HL, { sel: [], hover: null, pair: null, key: '' });
     setPhase('build');
     G.cur = null;
@@ -558,16 +561,29 @@
     c.fit = { spec, key, res, rcode: FF.sem.rCode(spec, c.data.S, c.N, res), score: scoreFit(res, spec) };
     editor.setTool('select');
     setPhase('results');
-    // first watch the paths grow into their estimates, then the scores
+    // first watch the paths grow into their estimates, then the scores. Until
+    // the score card is up, the button stays a busy "FIT" (no early NEXT) and
+    // the SCORE button is hidden.
     G.rview = 'diagram'; pane.dataset.rview = 'diagram';
     document.querySelectorAll('#rview-seg button').forEach(b => b.classList.toggle('on', b.dataset.rview === 'diagram'));
     busy = true;
+    pane.classList.add('revealing');
+    fitBtn.querySelector('.fit-label').textContent = 'FIT';
+    fitBtn.classList.remove('next');
+    fitBtn.classList.add('busy');
+    fitBtn.disabled = true;
     editor.setFitResult(res, {
       animate: true, duration: 1000,
       onDone: () => setTimeout(() => {
+        if (G.cur !== c) return;                      // left the game meanwhile
         busy = false;
         setRview('implied');
         showScoreCard(true);
+        // the card now covers the board; the real NEXT button waits underneath
+        pane.classList.remove('revealing');
+        fitBtn.classList.remove('busy');
+        fitBtn.disabled = false;
+        setPhase('results');
       }, 450),
     });
   }

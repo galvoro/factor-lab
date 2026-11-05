@@ -248,6 +248,7 @@ body.phase-results #canvas-pane .seg { background: #F3D9A8; border-color: #E2BD7
 .score-btn:hover { background: var(--amber-soft); }
 .score-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #E2BD7D; }
 #canvas-pane[data-phase="results"] .score-btn { display: inline-flex; }
+#canvas-pane.revealing .score-btn { visibility: hidden; }
 .seg .short { display: none; }
 
 
